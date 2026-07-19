@@ -1,4 +1,4 @@
-# 台股樂活五線譜
+# 均值回歸的標準差通道分析
 
 一個純前端的台灣股票研究工具，使用 React、TypeScript、ECharts、Tailwind CSS，並以本地可擁有的 React Bits-style 動畫元件打造視覺介面。
 
@@ -6,7 +6,7 @@
 
 - 由固定觀察清單切換股票，支援上市與上櫃標的
 - ECharts 股價走勢圖與時間區間切換介面
-- 樂活五線譜的估值區間卡片與快速摘要
+- 均值回歸與標準差通道的區間卡片與快速摘要
 - 響應式版面，支援桌面與行動裝置
 - `src/data/stocks.ts` 作為未來串接證交所、券商或自建 API 的資料邊界
 - `public/data/stocks.json` 集中管理要關注的台股清單與靜態行情 JSON
@@ -47,7 +47,7 @@ make clean    # Remove build output and temporary files
 
 1. 將 `src/data/stocks.ts` 的 mock data 改成 `src/services/stockApi.ts`。
 2. 建立 API response type，將行情、財報與估值計算分開。
-3. 將五線譜計算放在純函式中，補上 Vitest 測試。
+3. 將標準差通道計算放在純函式中，補上 Vitest 測試。
 4. 若瀏覽器直接呼叫資料來源遇到 CORS，使用同源 proxy 或後端 API gateway。
 
 ## 關注清單設定

@@ -82,4 +82,4 @@ export async function loadStocks(): Promise<Stock[]> {
   return Promise.all(payload.stocks.slice(0, 2).map((item) => loadStock(item.code)))
 }
 
-export const lineLabels = ['悲觀線', '相對悲觀線', '趨勢線', '相對樂觀線', '樂觀線']
+export const lineLabels = ['-2α', '-1α', 'TL', '+1α', '+2α']

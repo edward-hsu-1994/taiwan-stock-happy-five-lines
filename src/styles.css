@@ -45,6 +45,13 @@ button { cursor: pointer; }
 .watchlist-items button em { font-style: normal; font-size: 11px; }
 .watchlist-items button small { color: #9aa398; font-family: 'DM Mono', monospace; font-size: 9px; }
 .dashboard { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 20px; min-width: 0; }
+.research-disclosure { grid-column: 1 / -1; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 18px; border: 1px solid #f0d5c6; border-radius: 16px; color: #6e5748; background: #fff7f0; }
+.research-disclosure > div { display: grid; gap: 4px; }
+.research-disclosure b { color: #bd663e; font-size: 13px; }
+.research-disclosure span { font-size: 12px; line-height: 1.6; }
+.research-disclosure small { color: #9a7d6a; font-size: 10px; line-height: 1.6; }
+.research-disclosure button { flex: 0 0 auto; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; color: #9a7d6a; background: transparent; font-size: 20px; line-height: 1; }
+.research-disclosure button:hover { color: #6e5748; background: #f8e3d8; }
 .main-card, .line-card { border: 1px solid #e2e7df; border-radius: 28px; background: #fff; box-shadow: 0 20px 60px rgba(37,52,38,.06); }
 .main-card { min-width: 0; padding: 28px 30px 18px; }
 .card-heading, .chart-toolbar, .title-row, .position-top, .section-title { display: flex; align-items: flex-start; justify-content: space-between; }
