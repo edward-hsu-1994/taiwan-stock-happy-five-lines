@@ -1,0 +1,4 @@
+node_modules/
+dist/
+job/__pycache__/
+*.pyc

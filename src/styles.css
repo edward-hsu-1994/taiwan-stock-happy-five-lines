@@ -1,0 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700;900&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+@import "tailwindcss";
+
+:root { font-family: 'Noto Sans TC', system-ui, sans-serif; font-synthesis: none; }
+body { margin: 0; min-width: 320px; }
+.font-display { font-family: 'Playfair Display', 'Noto Sans TC', serif; }
+.rb-reveal { animation: reveal 650ms cubic-bezier(.22,1,.36,1) both; }
+@keyframes reveal { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
