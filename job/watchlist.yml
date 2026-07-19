@@ -1,8 +1,0 @@
-# Active watchlist. The full official listed/TPEx catalog can be regenerated with make sync-watchlist.
-stocks:
-  - market: TWSE
-    code: "0050"
-    name: 元大台灣50
-  - market: TWSE
-    code: "006208"
-    name: 富邦台50
