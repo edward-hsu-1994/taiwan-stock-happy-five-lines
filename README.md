@@ -99,3 +99,7 @@ make fetch
 ```
 
 輸出資料包含 `date`、`close`、`market`、`code`、`name`、Yahoo symbol、幣別與抓取時間。這個工作適合在台灣收盤後透過 cron、GitHub Actions 或其他排程器執行。
+
+## GitHub Actions 自動更新
+
+`.github/workflows/update-stock-data.yml` 會每天台灣時間 18:30 執行 `latest` 模式；若有新的完成交易日收盤價，就會自動更新 `job/data/`、建立 commit 並推送回 `main`。也可以在 GitHub Actions 頁面使用 `workflow_dispatch` 手動執行。

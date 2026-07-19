@@ -1,0 +1,46 @@
+name: Update stock data
+
+on:
+  schedule:
+    # 18:30 Asia/Taipei (10:30 UTC), every day.
+    - cron: '30 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-stock-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: job/requirements.txt
+
+      - name: Install job dependencies
+        run: python -m pip install -r job/requirements.txt
+
+      - name: Fetch latest completed trading-day closes
+        run: python job/fetch_stock_prices.py --mode latest
+
+      - name: Commit and push data changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- job/data; then
+            echo "No new stock data to commit."
+            exit 0
+          fi
+          git add job/data
+          git commit -m "chore(data): update daily stock prices"
+          git push
