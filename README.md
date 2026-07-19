@@ -9,7 +9,7 @@
 - 樂活五線譜的估值區間卡片與快速摘要
 - 響應式版面，支援桌面與行動裝置
 - `src/data/stocks.ts` 作為未來串接證交所、券商或自建 API 的資料邊界
-- `job/watchlist.yml` 集中管理要關注的台股清單
+- `public/data/stocks.json` 集中管理要關注的台股清單與靜態行情 JSON
 
 ## 技術選型
 
@@ -51,13 +51,13 @@ make clean    # Remove build output and temporary files
 
 ## 關注清單設定
 
-`job/watchlist.yml` 是排程工作與未來資料服務共用的關注清單。每一筆資料包含：
+`public/data/stocks.json` 是排程工作與前端共用的關注清單。每一筆資料包含：
 
 - `market`：建議使用國際市場代碼 `TWSE`（上市）或 `TPEx`（上櫃）
 - `code`：四位數股票代號，使用字串以保留前導零
 - `name`：股票名稱
 
-可使用 `make sync-watchlist` 從台灣證券交易所 ISIN 清單同步上市與上櫃的股票、ETF；同步結果會寫入 `job/watchlist.yml`，前端也直接讀取這份 YAML 作為自動完成來源。興櫃清單目前不納入。
+可使用 `make sync-watchlist` 從台灣證券交易所 ISIN 清單同步上市與上櫃的股票、ETF；同步結果會寫入 `public/data/stocks.json`，前端也直接讀取這份 JSON。興櫃清單目前不納入。
 
 市場代碼採用交易所英文縮寫，方便未來串接國際資料服務：
 
@@ -74,12 +74,12 @@ make clean    # Remove build output and temporary files
 
 ## 拉取每日收盤價
 
-`job/fetch_stock_prices.py` 會讀取 `job/watchlist.yml`，預設每檔股票取得一筆最新的已完成交易日收盤價，並寫入 `job/data/{股票代號}.json`。每個 JSON 檔案是 object，股票基本資料放在外層，歷史價格放在 `data` array；每次交易日執行會追加一筆，同一交易日重複執行時會更新該筆資料，不會產生重複紀錄。週末或休市日會使用最近一個已完成交易日，避免寫入虛假的收盤價。
+`scripts/fetch_stock_prices.py` 會讀取 `public/data/stocks.json`，預設每檔股票取得一筆最新的已完成交易日收盤價，並寫入 `public/data/{股票代號}.json`。每個 JSON 檔案是 object，股票基本資料放在外層，歷史價格放在 `data` array；每次交易日執行會追加一筆，同一交易日重複執行時會更新該筆資料，不會產生重複紀錄。週末或休市日會使用最近一個已完成交易日，避免寫入虛假的收盤價。
 
 若要補齊一段歷史資料，可使用 `backfill` 模式：
 
 ```bash
-python3 job/fetch_stock_prices.py \
+python3 scripts/fetch_stock_prices.py \
   --mode backfill \
   --start-date 2026-01-01 \
   --end-date 2026-07-19
@@ -93,7 +93,7 @@ make backfill START_DATE=2026-01-01 END_DATE=2026-07-19
 
 `backfill` 會抓取指定日期範圍內的每日收盤價，合併到既有 JSON object 的 `data` array，並依日期去重。
 
-每次執行前，腳本也會同步檢查 `job/data/`：凡是股票代號不再存在於 `job/watchlist.yml` 的 `.json` 檔案都會被清除；非 JSON 檔案不會受到影響。為避免誤刪，空的關注清單會讓腳本直接停止。
+每次執行前，腳本也會同步檢查 `public/data/`：凡是股票代號不再存在於 `public/data/stocks.json` 的 `.json` 檔案都會被清除；非 JSON 檔案不會受到影響。為避免誤刪，空的關注清單會讓腳本直接停止。
 
 ```bash
 make job-install
@@ -104,4 +104,4 @@ make fetch
 
 ## GitHub Actions 自動更新
 
-`.github/workflows/update-stock-data.yml` 會每天台灣時間 18:30 執行 `latest` 模式；若有新的完成交易日收盤價，就會自動更新 `job/data/`、建立 commit 並推送回 `main`。也可以在 GitHub Actions 頁面使用 `workflow_dispatch` 手動執行。
+`.github/workflows/update-stock-data.yml` 會每天台灣時間 18:30 執行 `latest` 模式；若有新的完成交易日收盤價，就會自動更新 `public/data/`、建立 commit 並推送回 `main`。也可以在 GitHub Actions 頁面使用 `workflow_dispatch` 手動執行。

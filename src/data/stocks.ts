@@ -11,6 +11,7 @@ export type JobStock = {
 }
 
 export type WatchlistEntry = Pick<JobStock, 'market' | 'code' | 'name'>
+export type WatchlistPayload = { last_updated_at?: string | null; stocks: WatchlistEntry[] }
 
 export type Stock = JobStock & {
   prices: number[]
@@ -64,35 +65,21 @@ function normalizeStock(payload: JobStock): Stock {
   }
 }
 
-export async function loadWatchlist(): Promise<WatchlistEntry[]> {
-  const response = await fetch('/job/watchlist.yml')
+export async function loadWatchlist(): Promise<WatchlistPayload> {
+  const response = await fetch('/data/stocks.json')
   if (!response.ok) throw new Error('無法讀取股票清單')
-  const text = await response.text()
-  const entries: WatchlistEntry[] = []
-  let current: Partial<WatchlistEntry> = {}
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^\s+-?\s*(market|code|name):\s*["']?(.+?)["']?\s*$/)
-    if (!match) continue
-    const [, key, value] = match
-    if (key === 'market' && current.code) {
-      entries.push(current as WatchlistEntry)
-      current = {}
-    }
-    current[key as keyof WatchlistEntry] = value
-  }
-  if (current.code) entries.push(current as WatchlistEntry)
-  return entries
+  return await response.json() as WatchlistPayload
 }
 
 export async function loadStock(code: string): Promise<Stock> {
-  const response = await fetch(`/job/data/${code}.json`)
+  const response = await fetch(`/data/${code}.json`)
   if (!response.ok) throw new Error(`無法讀取 ${code} 行情資料`)
   return normalizeStock(await response.json() as JobStock)
 }
 
 export async function loadStocks(): Promise<Stock[]> {
-  const watchlist = await loadWatchlist()
-  return Promise.all(watchlist.slice(0, 2).map((item) => loadStock(item.code)))
+  const payload = await loadWatchlist()
+  return Promise.all(payload.stocks.slice(0, 2).map((item) => loadStock(item.code)))
 }
 
 export const lineLabels = ['悲觀線', '相對悲觀線', '趨勢線', '相對樂觀線', '樂觀線']

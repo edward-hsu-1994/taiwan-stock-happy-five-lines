@@ -9,20 +9,31 @@ const calculationPeriods = { '近一個月': 22, '近三個月': 66, '近一年'
 type CalculationPeriod = keyof typeof calculationPeriods | '自訂範圍'
 
 const money = (value: number) => value.toLocaleString('zh-TW', { maximumFractionDigits: 2 })
+const routeStock = () => {
+  if (typeof window === 'undefined') return null
+  const [, market, code] = window.location.pathname.split('/')
+  return market && code ? { market, code } : null
+}
 
 function App() {
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([])
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
   const [stock, setStock] = useState<Stock | null>(null)
-  const [query, setQuery] = useState('0050')
-  const [selectedId, setSelectedId] = useState('0050')
-  const [range, setRange] = useState<Range>('近一年半')
-  const [calculationPeriod, setCalculationPeriod] = useState<CalculationPeriod>('近一年半')
+  const [selectedId, setSelectedId] = useState(() => routeStock()?.code ?? '0050')
+  const [range, setRange] = useState<Range>('近三年')
+  const [calculationPeriod, setCalculationPeriod] = useState<CalculationPeriod>('近三年')
   const [windowStart, setWindowStart] = useState(0)
   const [windowEnd, setWindowEnd] = useState(0)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    loadWatchlist().then(setWatchlist).catch(() => setError('股票清單載入失敗，請確認已執行清單同步。'))
+    loadWatchlist().then((payload) => { setWatchlist(payload.stocks); setLastUpdatedAt(payload.last_updated_at ?? null) }).catch(() => setError('股票清單載入失敗，請確認已執行清單同步。'))
+  }, [])
+
+  useEffect(() => {
+    const handleHistoryChange = () => setSelectedId(routeStock()?.code ?? '0050')
+    window.addEventListener('popstate', handleHistoryChange)
+    return () => window.removeEventListener('popstate', handleHistoryChange)
   }, [])
 
   useEffect(() => {
@@ -30,8 +41,8 @@ function App() {
     setStock(null)
     loadStock(selectedId).then((nextStock) => {
       setStock(nextStock)
-      setCalculationPeriod('近一年半')
-      setWindowStart(Math.max(0, nextStock.prices.length - calculationPeriods['近一年半']))
+      setCalculationPeriod('近三年')
+      setWindowStart(Math.max(0, nextStock.prices.length - calculationPeriods['近三年']))
       setWindowEnd(nextStock.prices.length - 1)
     }).catch(() => setError(`找不到 ${selectedId} 的行情資料。`))
   }, [selectedId])
@@ -77,34 +88,26 @@ function App() {
     }
   }, [stock, visible, analysis])
 
-  function search() {
-    const found = suggestions[0]
-    if (found) {
-      setQuery(`${found.code} ${found.name}`)
-      setSelectedId(found.code)
-    }
+  function chooseStock(item: WatchlistEntry) {
+    window.history.pushState({}, '', `/${item.market}/${item.code}`)
+    setSelectedId(item.code)
   }
 
-  const suggestions = useMemo(() => {
-    const keyword = query.trim().toLocaleLowerCase()
-    if (!keyword) return watchlist.slice(0, 8)
-    return watchlist.filter((item) => item.code.includes(keyword) || item.name.toLocaleLowerCase().includes(keyword)).slice(0, 8)
-  }, [query, watchlist])
-
   if (error) return <main className="page-shell"><div className="error-card">{error}</div></main>
-  if (!stock) return <main className="page-shell"><div className="loading-card"><span className="pulse-dot" />正在讀取 job/data 行情資料…</div></main>
+  if (!stock) return <main className="page-shell"><div className="loading-card"><span className="pulse-dot" />正在讀取靜態行情資料…</div></main>
   const sliderMax = Math.max(1, stock.prices.length - 1)
   const startPercent = (windowStart / sliderMax) * 100
   const endPercent = (windowEnd / sliderMax) * 100
+  const formattedLastUpdatedAt = lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'
 
   return <main className="page-shell">
-    <nav className="topbar"><div className="brand"><span className="brand-mark">₿</span><span className="font-display">樂活五線譜</span></div><span className="status-pill"><span /> LIVE DATA · {stock.source}</span></nav>
-    <section className="hero"><AnimatedContent><p className="eyebrow">CALM INVESTING · CLEAR DECISIONS</p><h1>用五條線，<br /><em>觀察股價位置。</em></h1><p className="hero-copy">把每日收盤價整理成一張有節奏的價格地圖。先看位置，再決定自己的投資步調。</p></AnimatedContent><div className="search-row"><div className="autocomplete"><input aria-label="搜尋股票代號或名稱" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && search()} placeholder="輸入股票代號或名稱，例如 2330" /><div className="suggestions">{suggestions.map((item) => <button key={`${item.market}-${item.code}`} onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(`${item.code} ${item.name}`); setSelectedId(item.code) }}><span><b>{item.code}</b><em>{item.name}</em></span><small>{item.market}</small></button>)}</div></div><button onClick={search}>查看股票 →</button></div><div className="stock-switcher">{watchlist.slice(0, 2).map((item) => <button key={item.code} className={item.code === stock.code ? 'active' : ''} onClick={() => { setQuery(`${item.code} ${item.name}`); setSelectedId(item.code) }}>{item.code} {item.name}</button>)}</div></section>
+    <nav className="topbar"><div className="brand"><span className="brand-mark">EH</span><span className="font-display">樂活五線譜</span></div><span className="status-pill"><span /> LIVE DATA · {stock.source}</span></nav>
+    <section className="hero"><AnimatedContent><p className="eyebrow">CALM INVESTING · CLEAR DECISIONS</p><h1>用五條線，<br /><em>觀察股價位置。</em></h1><p className="hero-copy">把每日收盤價整理成一張有節奏的價格地圖。先看位置，再決定自己的投資步調。</p></AnimatedContent></section>
 
-    <section className="dashboard"><div className="main-card"><div className="card-heading"><div><div className="title-row"><h2>{stock.name}</h2><span>{stock.code}</span></div><p>{stock.market} · {stock.symbol} · {stock.data.at(-1)?.date} 收盤</p></div><div className="price-block"><strong>{money(stock.price)}</strong><b className={stock.change >= 0 ? 'up' : 'down'}>{stock.change >= 0 ? '▲' : '▼'} {Math.abs(stock.change).toFixed(2)}%</b></div></div><div className="window-control"><div className="window-heading"><div><b>五線譜計算期間</b><small>選擇預設期間，或拖曳兩端把手自訂</small></div></div><div className="calculation-presets">{Object.entries(calculationPeriods).map(([label, count]) => <button key={label} className={calculationPeriod === label ? 'active' : ''} onClick={() => { setCalculationPeriod(label as CalculationPeriod); setWindowStart(Math.max(0, stock.prices.length - count)); setWindowEnd(stock.prices.length - 1) }}>{label}</button>)}</div><div className="window-slider"><div className="window-badges"><span className="window-badge start" style={{ left: `${startPercent}%` }}><b>START</b>{stock.dates[windowStart]}</span><span className="window-badge end" style={{ left: `${endPercent}%` }}><b>END</b>{stock.dates[windowEnd]}</span></div><div className="window-track"><span className="window-selected" style={{ left: `${startPercent}%`, width: `${Math.max(0, endPercent - startPercent)}%` }} /></div><input className="slider-start" aria-label="調整五線譜開始日期" type="range" min="0" max={sliderMax} value={windowStart} onChange={(event) => { setCalculationPeriod('自訂範圍'); setWindowStart(Math.min(Number(event.target.value), windowEnd - 2)) }} /><input className="slider-end" aria-label="調整五線譜結束日期" type="range" min="0" max={sliderMax} value={windowEnd} onChange={(event) => { setCalculationPeriod('自訂範圍'); setWindowEnd(Math.max(Number(event.target.value), windowStart + 2)) }} /></div></div><div className="chart-toolbar"><div><b>價格與長期五線譜</b><small>五條線沿選定期間的趨勢延伸</small></div><div className="range-tabs">{Object.keys(ranges).map((item) => <button key={item} onClick={() => setRange(item as Range)} className={range === item ? 'active' : ''}>{item}</button>)}</div></div><ReactECharts option={option} style={{ height: 360 }} /></div>
+    <div className="content-layout"><aside className="watchlist-panel"><div className="watchlist-heading"><span>WATCHLIST</span><b>股票清單</b></div><div className="watchlist-items">{watchlist.map((item) => <button key={`${item.market}-${item.code}`} className={item.code === stock.code ? 'active' : ''} onClick={() => chooseStock(item)}><span><b>{item.code}</b><em>{item.name}</em></span><small>{item.market}</small></button>)}</div></aside><section className="dashboard"><div className="main-card"><div className="card-heading"><div><div className="title-row"><h2>{stock.name}</h2><span>{stock.code}</span></div><p>{stock.market} · {stock.symbol} · {stock.data.at(-1)?.date} 收盤</p></div><div className="price-block"><strong>{money(stock.price)}</strong><b className={stock.change >= 0 ? 'up' : 'down'}>{stock.change >= 0 ? '▲' : '▼'} {Math.abs(stock.change).toFixed(2)}%</b></div></div><div className="window-control"><div className="window-heading"><div><b>五線譜計算期間</b><small>選擇預設期間，或拖曳兩端把手自訂</small></div></div><div className="calculation-presets">{Object.entries(calculationPeriods).map(([label, count]) => <button key={label} className={calculationPeriod === label ? 'active' : ''} onClick={() => { setCalculationPeriod(label as CalculationPeriod); setWindowStart(Math.max(0, stock.prices.length - count)); setWindowEnd(stock.prices.length - 1) }}>{label}</button>)}</div><div className="window-slider"><div className="window-badges"><span className="window-badge start" style={{ left: `${startPercent}%` }}><b>START</b>{stock.dates[windowStart]}</span><span className="window-badge end" style={{ left: `${endPercent}%` }}><b>END</b>{stock.dates[windowEnd]}</span></div><div className="window-track"><span className="window-selected" style={{ left: `${startPercent}%`, width: `${Math.max(0, endPercent - startPercent)}%` }} /></div><input className="slider-start" aria-label="調整五線譜開始日期" type="range" min="0" max={sliderMax} value={windowStart} onChange={(event) => { setCalculationPeriod('自訂範圍'); setWindowStart(Math.min(Number(event.target.value), windowEnd - 2)) }} /><input className="slider-end" aria-label="調整五線譜結束日期" type="range" min="0" max={sliderMax} value={windowEnd} onChange={(event) => { setCalculationPeriod('自訂範圍'); setWindowEnd(Math.max(Number(event.target.value), windowStart + 2)) }} /></div></div><div className="chart-toolbar"><div><b>價格與長期五線譜</b><small>五條線沿選定期間的趨勢延伸</small></div><div className="range-tabs">{Object.keys(ranges).map((item) => <button key={item} onClick={() => setRange(item as Range)} className={range === item ? 'active' : ''}>{item}</button>)}</div></div><ReactECharts option={option} style={{ height: 360 }} /></div>
 
       <aside className="sidebar"><AnimatedContent className="position-card"><div className="position-top"><div><small>目前價格位置</small><h3>{zone}</h3></div><span className="compass">⌁</span></div><div className="five-meter">{analysis.lines.map((line, index) => <div key={line} className={analysis.lines[index] === currentLine ? 'selected' : ''} style={{ left: `${index * 25}%` }}><i /><small>{lineLabels[index]}</small></div>)}<span className="current-pin" style={{ left: `${Math.max(0, Math.min(100, (stock.price - analysis.lines[0]) / (analysis.lines[4] - analysis.lines[0]) * 100))}%` }} /></div><div className="position-foot"><span>低估</span><span>合理</span><span>高估</span></div><p className="position-note">距離中線 <b>{distanceToTrend >= 0 ? '+' : ''}{distanceToTrend.toFixed(1)}%</b></p></AnimatedContent><AnimatedContent className="line-card"><div className="section-title"><h3>五條線</h3><span>R² {(analysis.rSquared * 100).toFixed(0)}% · CV {(analysis.cv * 100).toFixed(1)}%</span></div>{analysis.lines.map((line, index) => <div className={`line-item ${index === 2 ? 'fair' : ''}`} key={line}><span className="line-dot" /><span>{lineLabels[index]}</span><strong>{money(line)}</strong></div>)}<p className="method-note">依目前拖曳選定的期間做線性回歸：趨勢線 TL 上下各加減 1SD、2SD。R² 越高，趨勢參考性越強。</p></AnimatedContent></aside>
-    </section><p className="data-note">資料來源：{stock.source} · {stock.data.length.toLocaleString()} 筆日收盤價，來自 <code>job/data/{stock.code}.json</code>。五條線以完整歷史價格的長期趨勢與波動推導，不代表投資建議。</p>
+    </section></div><p className="data-note">資料來源：{stock.source} · {stock.data.length.toLocaleString()} 筆日收盤價。<br />最後更新時間：{formattedLastUpdatedAt}<br />五條線以完整歷史價格的長期趨勢與波動推導，不代表投資建議。</p>
   </main>
 }
 
