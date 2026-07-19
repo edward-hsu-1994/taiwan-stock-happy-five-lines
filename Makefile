@@ -1,4 +1,4 @@
-.PHONY: install dev build preview lint job-install fetch backfill clean
+.PHONY: install dev build preview lint job-install sync-watchlist fetch backfill clean
 
 install:
 	npm install
@@ -17,6 +17,9 @@ lint:
 
 job-install:
 	python3 -m pip install -r job/requirements.txt
+
+sync-watchlist:
+	python3 job/sync_watchlist.py
 
 fetch:
 	python3 job/fetch_stock_prices.py --mode latest

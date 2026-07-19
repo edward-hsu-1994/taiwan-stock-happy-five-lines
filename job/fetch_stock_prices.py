@@ -65,7 +65,7 @@ def load_watchlist(config_path: Path) -> list[dict[str, str]]:
         market = str(stock.get("market", ""))
         code = str(stock.get("code", ""))
         name = str(stock.get("name", ""))
-        if market not in {"TWSE", "TPEx"}:
+        if market not in {"TWSE", "TPEx", "Emerging"}:
             raise ValueError(f"Unsupported market '{market}' for {code}")
         if not code.isdigit() or not name:
             raise ValueError(f"Invalid stock entry: {stock}")

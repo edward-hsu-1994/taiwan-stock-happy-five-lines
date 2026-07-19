@@ -1,9 +1,8 @@
-# Taiwan stock watchlist for scheduled jobs and future data providers.
-# market must be either "TWSE" or "TPEx".
+# Active watchlist. The full official listed/TPEx catalog can be regenerated with make sync-watchlist.
 stocks:
   - market: TWSE
     code: "0050"
     name: 元大台灣50
   - market: TWSE
-    code: "0056"
-    name: 元大高股息
+    code: "006208"
+    name: 富邦台50

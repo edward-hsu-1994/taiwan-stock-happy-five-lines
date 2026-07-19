@@ -10,6 +10,8 @@ export type JobStock = {
   data: PricePoint[]
 }
 
+export type WatchlistEntry = Pick<JobStock, 'market' | 'code' | 'name'>
+
 export type Stock = JobStock & {
   prices: number[]
   dates: string[]
@@ -42,37 +44,55 @@ export function calculateFiveLines(prices: number[]): FiveLineResult {
   }
 }
 
-const dataFiles = ['0050.json', '0056.json']
+function normalizeStock(payload: JobStock): Stock {
+  const data = payload.data.filter((point) => Number.isFinite(point.close)).sort((a, b) => a.date.localeCompare(b.date))
+  const prices = data.map((point) => point.close)
+  const latestDate = new Date(`${data.at(-1)?.date}T00:00:00Z`).getTime()
+  const cutoff = latestDate - 365.25 * 1.5 * 24 * 60 * 60 * 1000
+  const analysisPrices = data.filter((point) => new Date(`${point.date}T00:00:00Z`).getTime() >= cutoff).map((point) => point.close)
+  const initial = calculateFiveLines(analysisPrices.length > 2 ? analysisPrices : prices)
+  const price = prices.at(-1) ?? 0
+  const previous = prices.at(-2) ?? price
+  return {
+    ...payload,
+    data,
+    prices,
+    dates: data.map((point) => point.date),
+    price,
+    change: previous ? ((price - previous) / previous) * 100 : 0,
+    ...initial,
+  }
+}
+
+export async function loadWatchlist(): Promise<WatchlistEntry[]> {
+  const response = await fetch('/job/watchlist.yml')
+  if (!response.ok) throw new Error('無法讀取股票清單')
+  const text = await response.text()
+  const entries: WatchlistEntry[] = []
+  let current: Partial<WatchlistEntry> = {}
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s+-?\s*(market|code|name):\s*["']?(.+?)["']?\s*$/)
+    if (!match) continue
+    const [, key, value] = match
+    if (key === 'market' && current.code) {
+      entries.push(current as WatchlistEntry)
+      current = {}
+    }
+    current[key as keyof WatchlistEntry] = value
+  }
+  if (current.code) entries.push(current as WatchlistEntry)
+  return entries
+}
+
+export async function loadStock(code: string): Promise<Stock> {
+  const response = await fetch(`/job/data/${code}.json`)
+  if (!response.ok) throw new Error(`無法讀取 ${code} 行情資料`)
+  return normalizeStock(await response.json() as JobStock)
+}
 
 export async function loadStocks(): Promise<Stock[]> {
-  const payloads = await Promise.all(
-    dataFiles.map((file) => fetch(`/job/data/${file}`).then((response) => {
-      if (!response.ok) throw new Error(`無法讀取 ${file}`)
-      return response.json() as Promise<JobStock>
-    })),
-  )
-
-  return payloads.map((payload) => {
-    const data = payload.data.filter((point) => Number.isFinite(point.close)).sort((a, b) => a.date.localeCompare(b.date))
-    const prices = data.map((point) => point.close)
-    const latestDate = new Date(`${data.at(-1)?.date}T00:00:00Z`).getTime()
-    const cutoff = latestDate - 365.25 * 3.5 * 24 * 60 * 60 * 1000
-    const analysisData = data.filter((point) => new Date(`${point.date}T00:00:00Z`).getTime() >= cutoff)
-    const analysisPrices = analysisData.map((point) => point.close)
-    const initial = calculateFiveLines(analysisPrices.length > 2 ? analysisPrices : prices)
-    const price = prices.at(-1) ?? 0
-    const previous = prices.at(-2) ?? price
-
-    return {
-      ...payload,
-      data,
-      prices,
-      dates: data.map((point) => point.date),
-      price,
-      change: previous ? ((price - previous) / previous) * 100 : 0,
-      ...initial,
-    }
-  })
+  const watchlist = await loadWatchlist()
+  return Promise.all(watchlist.slice(0, 2).map((item) => loadStock(item.code)))
 }
 
 export const lineLabels = ['悲觀線', '相對悲觀線', '趨勢線', '相對樂觀線', '樂觀線']

@@ -20,8 +20,14 @@ button { cursor: pointer; }
 .hero h1 em { color: #d4774d; font-style: italic; }
 .hero-copy { max-width: 540px; margin: 24px 0 0; color: #718071; font-size: 16px; line-height: 2; }
 .search-row { display: flex; max-width: 600px; gap: 10px; margin-top: 32px; }
+.autocomplete { position: relative; min-width: 0; flex: 1; }
 .search-row input { min-width: 0; flex: 1; height: 52px; padding: 0 18px; border: 1px solid #e0e5db; border-radius: 16px; outline: none; background: #fff; color: #17201d; }
 .search-row input:focus { border-color: #d4774d; box-shadow: 0 0 0 4px #f8e3d8; }
+.suggestions { position: absolute; top: 59px; right: 0; left: 0; z-index: 10; overflow: hidden; border: 1px solid #e2e7df; border-radius: 16px; background: #fff; box-shadow: 0 18px 40px rgba(37,52,38,.14); }
+.suggestions:empty { display: none; }
+.suggestions button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 14px; border: 0; border-bottom: 1px solid #f0f2ed; color: #17201d; background: #fff; text-align: left; }
+.suggestions button:last-child { border-bottom: 0; } .suggestions button:hover { background: #f6f8f3; }
+.suggestions button span { display: flex; align-items: baseline; gap: 10px; } .suggestions button b { font-family: 'DM Mono', monospace; font-size: 12px; } .suggestions button em { font-style: normal; font-size: 13px; } .suggestions button small { color: #9aa398; font-family: 'DM Mono', monospace; font-size: 10px; }
 .search-row button { padding: 0 22px; border: 0; border-radius: 16px; color: #fff; background: #d4774d; font-weight: 700; transition: .2s; }
 .search-row button:hover { background: #bb613b; transform: translateY(-1px); }
 .stock-switcher { display: flex; gap: 8px; margin-top: 18px; }
@@ -82,6 +88,6 @@ button { cursor: pointer; }
 .method-note { margin: 21px 0 0; padding-top: 15px; border-top: 1px solid #edf0e9; color: #9aa398; font-size: 10px; line-height: 1.7; }
 .data-note { margin-top: 20px; color: #9aa398; font-size: 11px; text-align: center; } code { padding: 2px 4px; border-radius: 4px; color: #788677; background: #eef2eb; }
 .loading-card, .error-card { width: min(560px, calc(100% - 48px)); margin: 20vh auto; padding: 30px; border: 1px solid #e2e7df; border-radius: 20px; background: #fff; text-align: center; } .pulse-dot { display: inline-block; margin-right: 10px; }
-@media (max-width: 800px) { .topbar, .hero, .dashboard, .data-note { width: min(100% - 32px, 600px); } .topbar { padding: 20px 0; } .status-pill { font-size: 9px; } .hero { padding: 42px 0 34px; } .dashboard { grid-template-columns: 1fr; } .main-card { padding: 22px 15px 12px; border-radius: 22px; } .card-heading { gap: 12px; } .title-row h2 { font-size: 27px; } .price-block strong { font-size: 25px; } .window-heading { align-items: flex-start; flex-direction: column; gap: 4px; } .calculation-presets button { flex: 1; min-width: 78px; } .window-slider { margin-top: 46px; } .window-badge { font-size: 9px; } .chart-toolbar { align-items: flex-start; flex-direction: column; gap: 14px; } .range-tabs { width: 100%; } .range-tabs button { flex: 1; } .search-row { flex-direction: column; } .search-row button { height: 52px; } }
+@media (max-width: 800px) { .topbar, .hero, .dashboard, .data-note { width: min(100% - 32px, 600px); } .topbar { padding: 20px 0; } .status-pill { font-size: 9px; } .hero { padding: 42px 0 34px; } .dashboard { grid-template-columns: 1fr; } .main-card { padding: 22px 15px 12px; border-radius: 22px; } .card-heading { gap: 12px; } .title-row h2 { font-size: 27px; } .price-block strong { font-size: 25px; } .window-heading { align-items: flex-start; flex-direction: column; gap: 4px; } .calculation-presets button { flex: 1; min-width: 78px; } .window-slider { margin-top: 46px; } .window-badge { font-size: 9px; } .chart-toolbar { align-items: flex-start; flex-direction: column; gap: 14px; } .range-tabs { width: 100%; } .range-tabs button { flex: 1; } .search-row { flex-direction: column; } .autocomplete { width: 100%; } .search-row button { height: 52px; } }
 @keyframes reveal { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 .rb-reveal { animation: reveal 650ms cubic-bezier(.22,1,.36,1) both; }

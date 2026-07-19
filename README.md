@@ -57,6 +57,8 @@ make clean    # Remove build output and temporary files
 - `code`：四位數股票代號，使用字串以保留前導零
 - `name`：股票名稱
 
+可使用 `make sync-watchlist` 從台灣證券交易所 ISIN 清單同步上市與上櫃的股票、ETF；同步結果會寫入 `job/watchlist.yml`，前端也直接讀取這份 YAML 作為自動完成來源。興櫃清單目前不納入。
+
 市場代碼採用交易所英文縮寫，方便未來串接國際資料服務：
 
 - `TWSE`：Taiwan Stock Exchange，台灣證券交易所，對應上市公司
