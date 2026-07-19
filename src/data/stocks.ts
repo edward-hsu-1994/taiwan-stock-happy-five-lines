@@ -1,28 +1,78 @@
-export type Stock = {
-  id: string
-  name: string
+export type PricePoint = { date: string; close: number }
+
+export type JobStock = {
   market: string
-  price: number
-  change: number
-  pe: number
-  dividend: number
-  fairValue: number
-  zone: string
-  dates: string[]
-  prices: number[]
+  code: string
+  name: string
+  symbol: string
+  currency: string
+  source: string
+  data: PricePoint[]
 }
 
-export const stocks: Stock[] = [
-  {
-    id: '2330', name: '台積電', market: 'TWSE', price: 1080, change: 1.89, pe: 21.4,
-    dividend: 1.68, fairValue: 1240, zone: '合理價',
-    dates: ['02/24', '03/03', '03/10', '03/17', '03/24', '03/31', '04/07', '04/14', '04/21', '04/28', '05/05', '05/12'],
-    prices: [952, 978, 965, 1002, 1025, 1014, 1038, 1052, 1068, 1042, 1060, 1080],
-  },
-  {
-    id: '2317', name: '鴻海', market: 'TWSE', price: 168.5, change: -0.88, pe: 14.8,
-    dividend: 3.92, fairValue: 190, zone: '合理價',
-    dates: ['02/24', '03/03', '03/10', '03/17', '03/24', '03/31', '04/07', '04/14', '04/21', '04/28', '05/05', '05/12'],
-    prices: [151, 156, 154, 160, 164, 158, 162, 166, 171, 165, 170, 168.5],
-  },
-]
+export type Stock = JobStock & {
+  prices: number[]
+  dates: string[]
+  price: number
+  change: number
+  lines: number[]
+  trendLines: number[][]
+  rSquared: number
+  cv: number
+}
+
+export type FiveLineResult = Pick<Stock, 'lines' | 'trendLines' | 'rSquared' | 'cv'>
+
+export function calculateFiveLines(prices: number[]): FiveLineResult {
+  const xs = prices.map((_, index) => index)
+  const xMean = xs.reduce((sum, value) => sum + value, 0) / (xs.length || 1)
+  const yMean = prices.reduce((sum, value) => sum + value, 0) / (prices.length || 1)
+  const slope = prices.reduce((sum, value, index) => sum + (xs[index] - xMean) * (value - yMean), 0) / (xs.reduce((sum, value) => sum + (value - xMean) ** 2, 0) || 1)
+  const intercept = yMean - slope * xMean
+  const fitted = prices.map((_, index) => intercept + slope * index)
+  const residuals = prices.map((value, index) => value - fitted[index])
+  const deviation = Math.sqrt(residuals.reduce((sum, value) => sum + value ** 2, 0) / (residuals.length || 1)) || yMean * 0.05
+  const trendLines = [-2, -1, 0, 1, 2].map((offset) => fitted.map((value) => Math.max(0, value + offset * deviation)))
+  const totalVariance = prices.reduce((sum, value) => sum + (value - yMean) ** 2, 0)
+  return {
+    trendLines,
+    lines: trendLines.map((line) => line.at(-1) ?? 0),
+    rSquared: totalVariance ? Math.max(0, 1 - residuals.reduce((sum, value) => sum + value ** 2, 0) / totalVariance) : 0,
+    cv: yMean ? deviation / yMean : 0,
+  }
+}
+
+const dataFiles = ['0050.json', '0056.json']
+
+export async function loadStocks(): Promise<Stock[]> {
+  const payloads = await Promise.all(
+    dataFiles.map((file) => fetch(`/job/data/${file}`).then((response) => {
+      if (!response.ok) throw new Error(`無法讀取 ${file}`)
+      return response.json() as Promise<JobStock>
+    })),
+  )
+
+  return payloads.map((payload) => {
+    const data = payload.data.filter((point) => Number.isFinite(point.close)).sort((a, b) => a.date.localeCompare(b.date))
+    const prices = data.map((point) => point.close)
+    const latestDate = new Date(`${data.at(-1)?.date}T00:00:00Z`).getTime()
+    const cutoff = latestDate - 365.25 * 3.5 * 24 * 60 * 60 * 1000
+    const analysisData = data.filter((point) => new Date(`${point.date}T00:00:00Z`).getTime() >= cutoff)
+    const analysisPrices = analysisData.map((point) => point.close)
+    const initial = calculateFiveLines(analysisPrices.length > 2 ? analysisPrices : prices)
+    const price = prices.at(-1) ?? 0
+    const previous = prices.at(-2) ?? price
+
+    return {
+      ...payload,
+      data,
+      prices,
+      dates: data.map((point) => point.date),
+      price,
+      change: previous ? ((price - previous) / previous) * 100 : 0,
+      ...initial,
+    }
+  })
+}
+
+export const lineLabels = ['悲觀線', '相對悲觀線', '趨勢線', '相對樂觀線', '樂觀線']

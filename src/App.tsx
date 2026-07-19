@@ -1,50 +1,94 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { AnimatedContent } from './components/reactbits/AnimatedContent'
-import { stocks } from './data/stocks'
+import { calculateFiveLines, lineLabels, loadStocks, type Stock } from './data/stocks'
+
+const ranges = { '近 1 個月': 22, '近 3 個月': 66, '近 1 年': 252 } as const
+type Range = keyof typeof ranges
+
+const money = (value: number) => value.toLocaleString('zh-TW', { maximumFractionDigits: 2 })
 
 function App() {
-  const [query, setQuery] = useState('2330')
-  const [selectedId, setSelectedId] = useState('2330')
-  const [range, setRange] = useState('近 3 個月')
-  const stock = stocks.find((item) => item.id === selectedId) ?? stocks[0]
-  const isPositive = stock.change >= 0
+  const [stocks, setStocks] = useState<Stock[]>([])
+  const [query, setQuery] = useState('0050')
+  const [selectedId, setSelectedId] = useState('0050')
+  const [range, setRange] = useState<Range>('近 3 個月')
+  const [windowStart, setWindowStart] = useState(0)
+  const [windowEnd, setWindowEnd] = useState(0)
+  const [error, setError] = useState('')
 
-  const option = useMemo(() => ({
-    animationDuration: 700,
-    grid: { left: 8, right: 14, top: 28, bottom: 4, containLabel: true },
-    tooltip: { trigger: 'axis', backgroundColor: '#17201d', borderWidth: 0, textStyle: { color: '#fff' } },
-    xAxis: { type: 'category', boundaryGap: false, data: stock.dates, axisLine: { lineStyle: { color: '#dfe4da' } }, axisLabel: { color: '#8b958b' } },
-    yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { color: '#edf0e9' } }, axisLabel: { color: '#8b958b' } },
-    series: [{ name: '收盤價', type: 'line', smooth: true, showSymbol: false, data: stock.prices, lineStyle: { width: 3, color: '#e8895b' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(232,137,91,.27)' }, { offset: 1, color: 'rgba(232,137,91,0)' }] } } }],
-  }), [stock])
+  useEffect(() => {
+    loadStocks().then(setStocks).catch(() => setError('行情資料載入失敗，請確認開發伺服器正在執行。'))
+  }, [])
+
+  const stock = stocks.find((item) => item.code === selectedId) ?? stocks[0]
+  useEffect(() => {
+    if (!stock) return
+    setWindowStart(Math.max(0, stock.prices.length - 882))
+    setWindowEnd(stock.prices.length - 1)
+  }, [stock?.code])
+
+  const analysis = useMemo(() => {
+    if (!stock) return { dates: [], prices: [], trendLines: [], lines: [], rSquared: 0, cv: 0 }
+    const start = Math.min(windowStart, Math.max(0, stock.prices.length - 2))
+    const end = Math.max(start + 2, Math.min(windowEnd || stock.prices.length - 1, stock.prices.length - 1))
+    const prices = stock.prices.slice(start, end + 1)
+    return { ...calculateFiveLines(prices), dates: stock.dates.slice(start, end + 1), prices }
+  }, [stock, windowStart, windowEnd])
+
+  const visible = useMemo(() => {
+    if (!stock) return { dates: [], prices: [], trendLines: [] }
+    const count = ranges[range]
+    const start = Math.max(0, analysis.dates.length - count)
+    return { dates: analysis.dates.slice(start), prices: analysis.prices.slice(start), trendLines: analysis.trendLines.map((line) => line.slice(start)) }
+  }, [range, stock, analysis])
+
+  const currentLine = stock ? analysis.lines.reduce((best, line) => Math.abs(line - stock.price) < Math.abs(best - stock.price) ? line : best, analysis.lines[0]) : 0
+  const zoneIndex = stock ? Math.max(0, Math.min(4, (() => { const index = analysis.lines.findIndex((line, lineIndex) => stock.price <= line && (lineIndex === 0 || stock.price > analysis.lines[lineIndex - 1])); return index === -1 ? 4 : index })())) : 2
+  const zone = lineLabels[zoneIndex] ?? '合理'
+  const upside = stock ? ((analysis.lines[2] / stock.price - 1) * 100) : 0
+
+  const option = useMemo(() => {
+    if (!stock) return {}
+    const lineSeries = analysis.lines.map((line, index) => ({
+      name: lineLabels[index],
+      type: 'line',
+      data: visible.trendLines[index],
+      symbol: 'none',
+      lineStyle: { color: index === 2 ? '#d4774d' : index < 2 ? '#6d9b78' : '#b99a65', width: index === 2 ? 2.5 : 1.5, type: index === 2 ? 'solid' : 'dashed', opacity: index === 2 ? 1 : .75 },
+      label: { show: true, formatter: `${lineLabels[index]} ${money(line)}`, color: index === 2 ? '#d4774d' : '#788677', fontSize: 10, fontWeight: index === 2 ? 700 : 400, position: 'insideEndTop' },
+      tooltip: { show: false },
+    }))
+    return {
+      animationDuration: 500,
+      grid: { left: 8, right: 18, top: 24, bottom: 8, containLabel: true },
+      tooltip: { trigger: 'axis', backgroundColor: '#17201d', borderWidth: 0, textStyle: { color: '#fff' }, formatter: (items: { axisValue: string; seriesName: string; value: number }[]) => `${items[0]?.axisValue ?? ''}<br/><b>收盤價 ${money(items.find((item) => item.seriesName === '收盤價')?.value ?? 0)}</b>` },
+      xAxis: { type: 'category', boundaryGap: false, data: visible.dates, axisLine: { lineStyle: { color: '#dfe4da' } }, axisLabel: { color: '#8b958b', hideOverlap: true, formatter: (value: string) => value.slice(5) } },
+      yAxis: { type: 'value', scale: true, min: (value: { min: number }) => Math.floor(value.min * .96), max: (value: { max: number }) => Math.ceil(value.max * 1.04), splitLine: { lineStyle: { color: '#edf0e9' } }, axisLabel: { color: '#8b958b', formatter: (value: number) => money(value) } },
+      series: [{ name: '收盤價', type: 'line', smooth: .2, showSymbol: false, data: visible.prices, lineStyle: { width: 3, color: '#e8895b' }, itemStyle: { color: '#e8895b' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(232,137,91,.25)' }, { offset: 1, color: 'rgba(232,137,91,0)' }] } }, markLine: { silent: true, symbol: 'none', data: [{ yAxis: stock.price, lineStyle: { color: '#17201d', width: 1, type: 'dotted' }, label: { formatter: `目前 ${money(stock.price)}`, color: '#17201d', position: 'insideStartTop' } }] }, }, ...lineSeries],
+    }
+  }, [stock, visible, analysis])
 
   function search() {
-    const found = stocks.find((item) => item.id === query.trim() || item.name.includes(query.trim()))
-    if (found) setSelectedId(found.id)
+    const found = stocks.find((item) => item.code === query.trim() || item.name.includes(query.trim()))
+    if (found) setSelectedId(found.code)
   }
 
-  return (
-    <main className="min-h-screen bg-[#f7f8f3] text-[#17201d]">
-      <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-7 lg:px-10">
-        <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#17201d] text-lg text-[#f6c866]">₿</span><span className="font-display text-lg font-bold tracking-tight">樂活五線譜</span></div>
-        <span className="rounded-full bg-[#e8eee3] px-4 py-2 text-xs font-semibold text-[#61705f]">台股研究工具 · Beta</span>
-      </nav>
+  if (error) return <main className="page-shell"><div className="error-card">{error}</div></main>
+  if (!stock) return <main className="page-shell"><div className="loading-card"><span className="pulse-dot" />正在讀取 job/data 行情資料…</div></main>
+  const sliderMax = Math.max(1, stock.prices.length - 1)
+  const startPercent = (windowStart / sliderMax) * 100
+  const endPercent = (windowEnd / sliderMax) * 100
 
-      <section className="mx-auto max-w-7xl px-6 pb-10 pt-8 lg:px-10 lg:pt-14">
-        <AnimatedContent>
-          <div className="max-w-3xl"><p className="mb-4 text-sm font-bold uppercase tracking-[.2em] text-[#d4774d]">Calm investing, clear decisions</p><h1 className="font-display text-5xl font-bold leading-[1.05] tracking-[-.04em] sm:text-7xl">用五條線，<br /><em className="text-[#d4774d]">看懂一檔股票。</em></h1><p className="mt-6 max-w-xl text-base leading-8 text-[#718071]">把複雜的財務數字，整理成一張簡單的樂活五線譜。找到自己的買進節奏，長期做出舒服的投資決定。</p></div>
-        </AnimatedContent>
-        <div className="mt-10 flex max-w-xl gap-3"><div className="relative flex-1"><span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#8b958b]">⌕</span><input aria-label="搜尋股票代號或名稱" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && search()} className="h-14 w-full rounded-2xl border border-[#e0e5db] bg-white pl-11 pr-4 outline-none transition focus:border-[#d4774d]" placeholder="輸入股票代號或名稱，例如 2330" /></div><button onClick={search} className="h-14 rounded-2xl bg-[#d4774d] px-6 font-bold text-white transition hover:bg-[#bb613b]">開始查看</button></div>
-      </section>
+  return <main className="page-shell">
+    <nav className="topbar"><div className="brand"><span className="brand-mark">₿</span><span className="font-display">樂活五線譜</span></div><span className="status-pill"><span /> LIVE DATA · {stock.source}</span></nav>
+    <section className="hero"><AnimatedContent><p className="eyebrow">CALM INVESTING · CLEAR DECISIONS</p><h1>用五條線，<br /><em>看懂一檔股票。</em></h1><p className="hero-copy">把每日收盤價整理成一張有節奏的價格地圖。先看位置，再決定自己的投資步調。</p></AnimatedContent><div className="search-row"><input aria-label="搜尋股票代號或名稱" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && search()} placeholder="輸入 0050 或股票名稱" /><button onClick={search}>查看股票 →</button></div><div className="stock-switcher">{stocks.map((item) => <button key={item.code} className={item.code === stock.code ? 'active' : ''} onClick={() => setSelectedId(item.code)}>{item.code} {item.name}</button>)}</div></section>
 
-      <section className="mx-auto max-w-7xl px-6 pb-16 lg:px-10"><div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-        <AnimatedContent className="rounded-[2rem] border border-[#e2e7df] bg-white p-5 shadow-[0_20px_60px_rgba(37,52,38,.06)] sm:p-8"><div className="mb-8 flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-3"><h2 className="font-display text-3xl font-bold">{stock.name}</h2><span className="rounded-md bg-[#eef2eb] px-2 py-1 text-xs font-bold text-[#788677]">{stock.id}</span></div><p className="mt-2 text-sm text-[#8b958b]">{stock.market} · 收盤價</p></div><div className="text-right"><p className="font-display text-4xl font-bold">{stock.price.toLocaleString()}</p><p className={`mt-1 text-sm font-bold ${isPositive ? 'text-[#3a9569]' : 'text-[#d4774d]'}`}>{isPositive ? '▲' : '▼'} {Math.abs(stock.change).toFixed(2)}%</p></div></div><div className="mb-4 flex items-center justify-between"><p className="text-sm font-bold text-[#61705f]">股價走勢</p><div className="flex gap-1 rounded-xl bg-[#f5f6f1] p-1">{['近 1 個月', '近 3 個月', '近 1 年'].map((item) => <button key={item} onClick={() => setRange(item)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${range === item ? 'bg-white text-[#17201d] shadow-sm' : 'text-[#8b958b]'}`}>{item}</button>)}</div></div><ReactECharts option={option} style={{ height: 330 }} /></AnimatedContent>
+    <section className="dashboard"><div className="main-card"><div className="card-heading"><div><div className="title-row"><h2>{stock.name}</h2><span>{stock.code}</span></div><p>{stock.market} · {stock.symbol} · {stock.data.at(-1)?.date} 收盤</p></div><div className="price-block"><strong>{money(stock.price)}</strong><b className={stock.change >= 0 ? 'up' : 'down'}>{stock.change >= 0 ? '▲' : '▼'} {Math.abs(stock.change).toFixed(2)}%</b></div></div><div className="window-control"><div className="window-heading"><div><b>五線譜計算期間</b><small>拖曳兩端把手調整回歸資料範圍</small></div></div><div className="window-slider"><div className="window-badges"><span className="window-badge start" style={{ left: `${startPercent}%` }}><b>START</b>{stock.dates[windowStart]}</span><span className="window-badge end" style={{ left: `${endPercent}%` }}><b>END</b>{stock.dates[windowEnd]}</span></div><div className="window-track"><span className="window-selected" style={{ left: `${startPercent}%`, width: `${Math.max(0, endPercent - startPercent)}%` }} /></div><input className="slider-start" aria-label="調整五線譜開始日期" type="range" min="0" max={sliderMax} value={windowStart} onChange={(event) => setWindowStart(Math.min(Number(event.target.value), windowEnd - 2))} /><input className="slider-end" aria-label="調整五線譜結束日期" type="range" min="0" max={sliderMax} value={windowEnd} onChange={(event) => setWindowEnd(Math.max(Number(event.target.value), windowStart + 2))} /></div></div><div className="chart-toolbar"><div><b>價格與長期五線譜</b><small>五條線沿選定期間的趨勢延伸</small></div><div className="range-tabs">{Object.keys(ranges).map((item) => <button key={item} onClick={() => setRange(item as Range)} className={range === item ? 'active' : ''}>{item}</button>)}</div></div><ReactECharts option={option} style={{ height: 360 }} /></div>
 
-        <div className="space-y-5"><AnimatedContent className="rounded-[2rem] bg-[#17201d] p-7 text-white"><p className="text-sm font-bold text-[#aebbaa]">目前五線譜位置</p><div className="mt-4 flex items-end justify-between"><div><p className="font-display text-4xl font-bold text-[#f6c866]">{stock.zone}</p><p className="mt-2 text-sm leading-6 text-[#aebbaa]">距離估算合理價<br />還有 {((stock.fairValue / stock.price - 1) * 100).toFixed(1)}% 空間</p></div><span className="text-5xl">⌁</span></div><div className="mt-8 h-2 rounded-full bg-[#35433b]"><div className="h-2 w-[68%] rounded-full bg-[#f6c866]" /></div><div className="mt-3 flex justify-between text-xs text-[#aebbaa]"><span>便宜價</span><span>合理價</span><span>昂貴價</span></div></AnimatedContent><AnimatedContent className="rounded-[2rem] border border-[#e2e7df] bg-white p-7"><div className="flex items-center justify-between"><h3 className="font-display text-xl font-bold">快速摘要</h3><span className="text-[#d4774d]">✦</span></div><div className="mt-6 grid grid-cols-2 gap-y-6"><div><p className="text-xs text-[#8b958b]">本益比</p><p className="mt-1 text-xl font-bold">{stock.pe} <small className="text-xs font-normal text-[#8b958b]">倍</small></p></div><div><p className="text-xs text-[#8b958b]">殖利率</p><p className="mt-1 text-xl font-bold">{stock.dividend}%</p></div><div><p className="text-xs text-[#8b958b]">估算合理價</p><p className="mt-1 text-xl font-bold">{stock.fairValue.toLocaleString()}</p></div><div><p className="text-xs text-[#8b958b]">資料狀態</p><p className="mt-1 text-xl font-bold text-[#3a9569]">已更新</p></div></div></AnimatedContent></div>
-      </div><p className="mt-6 text-center text-xs leading-6 text-[#9aa398]">資料為示意用途，非投資建議。實際五線譜計算需串接公開財報與市場行情資料。</p></section>
-    </main>
-  )
+      <aside className="sidebar"><AnimatedContent className="position-card"><div className="position-top"><div><small>目前價格位置</small><h3>{zone}</h3></div><span className="compass">⌁</span></div><div className="five-meter">{analysis.lines.map((line, index) => <div key={line} className={analysis.lines[index] === currentLine ? 'selected' : ''} style={{ left: `${index * 25}%` }}><i /><small>{lineLabels[index]}</small></div>)}<span className="current-pin" style={{ left: `${Math.max(0, Math.min(100, (stock.price - analysis.lines[0]) / (analysis.lines[4] - analysis.lines[0]) * 100))}%` }} /></div><div className="position-foot"><span>低估</span><span>合理</span><span>高估</span></div><p className="position-note">距離中線 <b>{upside >= 0 ? '+' : ''}{upside.toFixed(1)}%</b></p></AnimatedContent><AnimatedContent className="line-card"><div className="section-title"><h3>五條線</h3><span>R² {(analysis.rSquared * 100).toFixed(0)}% · CV {(analysis.cv * 100).toFixed(1)}%</span></div>{analysis.lines.map((line, index) => <div className={`line-item ${index === 2 ? 'fair' : ''}`} key={line}><span className="line-dot" /><span>{lineLabels[index]}</span><strong>{money(line)}</strong></div>)}<p className="method-note">依目前拖曳選定的期間做線性回歸：趨勢線 TL 上下各加減 1SD、2SD。R² 越高，趨勢參考性越強。</p></AnimatedContent></aside>
+    </section><p className="data-note">資料來源：{stock.source} · {stock.data.length.toLocaleString()} 筆日收盤價，來自 <code>job/data/{stock.code}.json</code>。五條線以完整歷史價格的長期趨勢與波動推導，不代表投資建議。</p>
+  </main>
 }
 
 export default App
