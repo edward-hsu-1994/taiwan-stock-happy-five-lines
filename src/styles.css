@@ -28,7 +28,7 @@ button { cursor: pointer; }
 .content-layout { display: grid; grid-template-columns: 180px minmax(0, 1fr); align-items: stretch; gap: 20px; height: calc(100vh - var(--nav-height) - 14px - 50px - 50px); margin-top: calc(var(--nav-height) + 14px); overflow-y: auto; scrollbar-color: #b7c6b6 transparent; scrollbar-width: thin; }
 .content-layout::-webkit-scrollbar { width: 7px; }
 .content-layout::-webkit-scrollbar-thumb { border-radius: 99px; background: #b7c6b6; }
-.watchlist-panel { position: sticky; top: 92px; align-self: stretch; display: flex; height: 100%; min-height: 0; flex-direction: column; overflow: hidden; padding: 18px 12px; border: 1px solid #e2e7df; border-radius: 22px; background: rgba(255,255,255,.75); box-shadow: 0 16px 40px rgba(37,52,38,.05); }
+.watchlist-panel { position: sticky; top: 0; align-self: stretch; display: flex; width: 100%; height: 100%; max-height: calc(100vh - var(--nav-height) - 14px - 50px - 50px); min-height: 0; flex-direction: column; overflow: hidden; padding: 18px 12px; border: 1px solid #e2e7df; border-radius: 22px; background: rgba(255,255,255,.75); box-shadow: 0 16px 40px rgba(37,52,38,.05); }
 .watchlist-heading { padding: 0 8px 12px; border-bottom: 1px solid #edf0e9; }
 .watchlist-heading span { display: block; color: #d4774d; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .16em; }
 .watchlist-heading b { display: block; margin-top: 4px; font-size: 13px; }
