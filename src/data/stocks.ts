@@ -26,6 +26,15 @@ export type Stock = JobStock & {
 
 export type FiveLineResult = Pick<Stock, 'lines' | 'trendLines' | 'rSquared' | 'cv'>
 
+export type LohuoChannelResult = {
+  middle: number
+  upper: number
+  lower: number
+  bandwidth: number
+  percentB: number
+  period: number
+}
+
 export function calculateFiveLines(prices: number[]): FiveLineResult {
   const xs = prices.map((_, index) => index)
   const xMean = xs.reduce((sum, value) => sum + value, 0) / (xs.length || 1)
@@ -43,6 +52,37 @@ export function calculateFiveLines(prices: number[]): FiveLineResult {
     rSquared: totalVariance ? Math.max(0, 1 - residuals.reduce((sum, value) => sum + value ** 2, 0) / totalVariance) : 0,
     cv: yMean ? deviation / yMean : 0,
   }
+}
+
+export function calculateLohuoChannel(prices: number[], period = 100): LohuoChannelResult {
+  const window = prices.slice(-period)
+  const middle = window.reduce((sum, value) => sum + value, 0) / (window.length || 1)
+  const variance = window.reduce((sum, value) => sum + (value - middle) ** 2, 0) / (window.length || 1)
+  const deviation = Math.sqrt(variance)
+  const upper = middle + 2 * deviation
+  const lower = Math.max(0, middle - 2 * deviation)
+  const width = upper - lower
+  const latest = prices.at(-1) ?? middle
+  return {
+    middle,
+    upper,
+    lower,
+    bandwidth: middle ? width / middle : 0,
+    percentB: width ? (latest - lower) / width : 0.5,
+    period: window.length,
+  }
+}
+
+export function calculateLohuoChannelSeries(prices: number[], period = 100): { middle: number[]; upper: number[]; lower: number[] } {
+  return prices.map((_, index) => {
+    const channel = calculateLohuoChannel(prices.slice(0, index + 1), period)
+    return { middle: channel.middle, upper: channel.upper, lower: channel.lower }
+  }).reduce((series, channel) => {
+    series.middle.push(channel.middle)
+    series.upper.push(channel.upper)
+    series.lower.push(channel.lower)
+    return series
+  }, { middle: [], upper: [], lower: [] } as { middle: number[]; upper: number[]; lower: number[] })
 }
 
 function normalizeStock(payload: JobStock): Stock {
