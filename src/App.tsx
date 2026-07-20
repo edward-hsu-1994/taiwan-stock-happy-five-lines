@@ -47,6 +47,11 @@ function App() {
       setWindowEnd(nextStock.prices.length - 1)
     }).catch(() => setError(`找不到 ${selectedId} 的行情資料。`))
   }, [selectedId])
+
+  useEffect(() => {
+    if (!stock) return
+    document.querySelector<HTMLButtonElement>('.watchlist-items button.active')?.scrollIntoView({ block: 'nearest' })
+  }, [stock, watchlist])
   const analysis = useMemo(() => {
     if (!stock) return { dates: [], prices: [], trendLines: [], lines: [], rSquared: 0, cv: 0, startIndex: 0, endIndex: 0 }
     const start = Math.min(windowStart, Math.max(0, stock.prices.length - 2))
