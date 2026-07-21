@@ -7,8 +7,28 @@ const ranges = { '近一個月': 22, '近三個月': 66, '近一年': 252, '近�
 type Range = keyof typeof ranges
 const calculationPeriods = { '近一個月': 22, '近三個月': 66, '近一年': 252, '近一年半': 378, '近三年': 756 } as const
 type CalculationPeriod = keyof typeof calculationPeriods | '自訂範圍'
-type CalculationWindow = { id: number; start: number; end: number }
+type CalculationWindow = { id: number; startDate: string; endDate: string }
 const comparisonColors = ['#5778a4', '#8f63a9', '#2f9c95', '#c48a32', '#c45b72', '#687a3d']
+const comparisonStorageKey = 'five-line-comparison-windows'
+
+const loadComparisonWindows = (): CalculationWindow[] => {
+  try {
+    const value: unknown = JSON.parse(sessionStorage.getItem(comparisonStorageKey) ?? '[]')
+    if (!Array.isArray(value)) return []
+    return value.filter((item): item is CalculationWindow => typeof item?.id === 'number' && typeof item?.startDate === 'string' && typeof item?.endDate === 'string')
+  } catch {
+    return []
+  }
+}
+
+const resolveDateWindow = (dates: string[], item: CalculationWindow) => {
+  const start = dates.findIndex((date) => date >= item.startDate)
+  let end = -1
+  for (let index = dates.length - 1; index >= 0; index -= 1) {
+    if (dates[index] <= item.endDate) { end = index; break }
+  }
+  return start >= 0 && end - start >= 2 ? { start, end } : null
+}
 
 const money = (value: number) => value.toLocaleString('zh-TW', { maximumFractionDigits: 2 })
 const routeStock = () => {
@@ -27,10 +47,10 @@ function App() {
   const [calculationPeriod, setCalculationPeriod] = useState<CalculationPeriod>('近三年')
   const [windowStart, setWindowStart] = useState(0)
   const [windowEnd, setWindowEnd] = useState(0)
-  const [comparisonWindows, setComparisonWindows] = useState<CalculationWindow[]>([])
+  const [savedComparisonWindows, setComparisonWindows] = useState<CalculationWindow[]>(loadComparisonWindows)
   const [isDraggingWindow, setIsDraggingWindow] = useState(false)
   const windowDrag = useRef({ active: false, pointerX: 0, start: 0, end: 0 })
-  const nextWindowId = useRef(1)
+  const nextWindowId = useRef(Math.max(0, ...savedComparisonWindows.map((item) => item.id)) + 1)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -51,10 +71,12 @@ function App() {
       setCalculationPeriod('近三年')
       setWindowStart(Math.max(0, nextStock.prices.length - calculationPeriods['近三年']))
       setWindowEnd(nextStock.prices.length - 1)
-      setComparisonWindows([])
-      nextWindowId.current = 1
     }).catch(() => setError(`找不到 ${selectedId} 的行情資料。`))
   }, [selectedId])
+
+  useEffect(() => {
+    sessionStorage.setItem(comparisonStorageKey, JSON.stringify(savedComparisonWindows))
+  }, [savedComparisonWindows])
 
   useEffect(() => {
     if (!stock) return
@@ -70,11 +92,13 @@ function App() {
 
   const comparisonAnalyses = useMemo(() => {
     if (!stock) return []
-    return comparisonWindows.map((item) => {
-      const prices = stock.prices.slice(item.start, item.end + 1)
-      return { ...item, analysis: calculateFiveLines(prices) }
+    return savedComparisonWindows.flatMap((item) => {
+      const resolved = resolveDateWindow(stock.dates, item)
+      if (!resolved) return []
+      const prices = stock.prices.slice(resolved.start, resolved.end + 1)
+      return [{ ...item, ...resolved, analysis: calculateFiveLines(prices) }]
     })
-  }, [stock, comparisonWindows])
+  }, [stock, savedComparisonWindows])
 
   const visible = useMemo(() => {
     if (!stock) return { dates: [], prices: [], trendLines: [] }
@@ -86,7 +110,7 @@ function App() {
 
   const currentLine = stock ? analysis.lines.reduce((best, line) => Math.abs(line - stock.price) < Math.abs(best - stock.price) ? line : best, analysis.lines[0]) : 0
   const priceChange = stock ? stock.price - (stock.prices.at(-2) ?? stock.price) : 0
-  const zoneIndex = stock ? Math.max(0, Math.min(4, (() => { const index = analysis.lines.findIndex((line, lineIndex) => stock.price <= line && (lineIndex === 0 || stock.price > analysis.lines[lineIndex - 1])); return index === -1 ? 4 : index })())) : 2
+  const zoneIndex = stock ? analysis.lines.reduce((index, line, lineIndex) => stock.price >= line ? lineIndex : index, 0) : 2
   const zone = lineLabels[zoneIndex] ?? '合理'
   const distanceToTrend = stock ? ((stock.price / analysis.lines[2] - 1) * 100) : 0
   const lohuoChannel = useMemo(() => calculateLohuoChannel(stock?.prices ?? []), [stock])
@@ -187,8 +211,11 @@ function App() {
   }
 
   function addComparisonWindow() {
-    if (comparisonWindows.some((item) => item.start === windowStart && item.end === windowEnd)) return
-    setComparisonWindows((items) => [...items, { id: nextWindowId.current++, start: windowStart, end: windowEnd }])
+    if (!stock) return
+    const startDate = stock.dates[windowStart]
+    const endDate = stock.dates[windowEnd]
+    if (savedComparisonWindows.some((item) => item.startDate === startDate && item.endDate === endDate)) return
+    setComparisonWindows((items) => [...items, { id: nextWindowId.current++, startDate, endDate }])
   }
 
   function removeComparisonWindow(id: number) {
@@ -200,7 +227,11 @@ function App() {
   const sliderMax = Math.max(1, stock.prices.length - 1)
   const startPercent = (windowStart / sliderMax) * 100
   const endPercent = (windowEnd / sliderMax) * 100
-  const currentWindowIsSaved = comparisonWindows.some((item) => item.start === windowStart && item.end === windowEnd)
+  const comparisonWindows = savedComparisonWindows.flatMap((item) => {
+    const resolved = resolveDateWindow(stock.dates, item)
+    return resolved ? [{ ...item, ...resolved }] : []
+  })
+  const currentWindowIsSaved = savedComparisonWindows.some((item) => item.startDate === stock.dates[windowStart] && item.endDate === stock.dates[windowEnd])
   const formattedLastUpdatedAt = lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'
 
   return <main className="page-shell">
