@@ -120,6 +120,46 @@ button { cursor: pointer; }
 .data-note { margin-top: 20px; color: #9aa398; font-size: 11px; text-align: center; } code { padding: 2px 4px; border-radius: 4px; color: #788677; background: #eef2eb; }
 .dashboard-note { grid-column: 1 / -1; margin: 0 0 20px; }
 .loading-card, .error-card { width: min(560px, calc(100% - 48px)); margin: 20vh auto; padding: 30px; border: 1px solid #e2e7df; border-radius: 20px; background: #fff; text-align: center; } .pulse-dot { display: inline-block; margin-right: 10px; }
-@media (max-width: 800px) { :root { --nav-height: 64px; } .page-shell { height: auto; min-height: 100vh; overflow: visible; padding-bottom: 48px; } .topbar, .content-layout, .data-note { width: min(100% - 32px, 600px); } .topbar { width: 100%; padding: 0 16px; } .brand { font-size: 16px; gap: 8px; } .brand-mark { width: 36px; height: 36px; } .nav-tagline { display: none; } .status-pill { font-size: 9px; } .content-layout { grid-template-columns: 1fr; height: auto; overflow: visible; } .watchlist-panel { position: static; display: block; height: auto; overflow: visible; } .watchlist-items { display: flex; overflow-x: auto; overflow-y: hidden; } .watchlist-items button { min-width: 145px; } .dashboard { grid-template-columns: 1fr; } .main-card { padding: 22px 15px 12px; border-radius: 22px; } .card-heading { gap: 12px; } .title-row h2 { font-size: 27px; } .price-block strong { font-size: 25px; } .window-heading { align-items: flex-start; flex-direction: column; gap: 4px; } .calculation-presets button { flex: 1; min-width: 78px; } .window-slider { margin-top: 46px; } .window-badge { font-size: 9px; } .chart-toolbar { align-items: flex-start; flex-direction: column; gap: 14px; } .range-tabs { width: 100%; } .range-tabs button { flex: 1; } }
+@media (max-width: 800px) {
+  :root { --nav-height: 64px; }
+  html { overflow-x: hidden; overflow-y: auto; }
+  body { overflow-x: hidden; }
+  .page-shell { height: auto; min-height: 100vh; overflow: visible; padding-bottom: 48px; }
+  .topbar, .content-layout, .data-note { width: min(100% - 32px, 600px); }
+  .topbar { width: 100%; gap: 10px; padding: 0 16px; }
+  .brand { min-width: 0; gap: 8px; font-size: 16px; }
+  .brand-mark { width: 36px; height: 36px; flex: none; }
+  .brand .font-display { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-tagline { display: none; }
+  .status-pill { flex: none; padding: 6px 8px; white-space: nowrap; font-size: 8px; letter-spacing: .03em; }
+  .content-layout { grid-template-columns: minmax(0, 1fr); height: auto; overflow: visible; }
+  .watchlist-panel { position: static; display: block; height: auto; max-height: none; overflow: visible; padding: 14px 10px; }
+  .watchlist-items { display: flex; overflow-x: auto; overflow-y: hidden; }
+  .watchlist-items button { min-width: 132px; }
+  .dashboard { grid-template-columns: minmax(0, 1fr); }
+  .main-card { padding: 22px 15px 12px; border-radius: 22px; }
+  .card-heading { gap: 12px; }
+  .title-row h2 { font-size: 27px; }
+  .price-block { flex: none; }
+  .price-block strong { font-size: 25px; }
+  .window-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .calculation-presets button { flex: 1; min-width: 78px; }
+  .comparison-windows > span { max-width: 100%; }
+  .window-slider { margin-top: 46px; }
+  .window-badge { max-width: 58%; overflow: hidden; text-overflow: ellipsis; font-size: 9px; }
+  .window-slider .window-badge.start { transform: translateX(0); }
+  .window-slider .window-badge.end { transform: translateX(-100%); }
+  .chart-toolbar { align-items: flex-start; flex-direction: column; gap: 14px; }
+  .range-tabs { width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .range-tabs::-webkit-scrollbar { display: none; }
+  .range-tabs button { flex: none; white-space: nowrap; }
+}
+
+@media (max-width: 420px) {
+  .status-pill { max-width: 112px; overflow: hidden; text-overflow: ellipsis; }
+  .card-heading { align-items: flex-end; }
+  .title-row h2 { font-size: 24px; }
+  .price-block strong { font-size: 22px; }
+}
 @keyframes reveal { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 .rb-reveal { animation: reveal 650ms cubic-bezier(.22,1,.36,1) both; }
