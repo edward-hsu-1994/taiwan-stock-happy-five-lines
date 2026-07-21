@@ -68,6 +68,9 @@ button { cursor: pointer; }
 .window-control { margin-top: 24px; padding: 14px 16px 10px; border: 1px solid #edf0e9; border-radius: 16px; background: #fafbf8; }
 .window-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .window-heading b { display: block; font-size: 12px; } .window-heading small { display: block; margin-top: 4px; color: #9aa398; font-size: 10px; }
+.add-comparison { flex: none; padding: 7px 10px; border: 1px solid #b9cbb9; border-radius: 8px; color: #2f7252; background: #fff; font-size: 10px; font-weight: 700; }
+.add-comparison:hover:not(:disabled) { border-color: #3a9569; background: #f2f8f3; }
+.add-comparison:disabled { cursor: default; opacity: .5; }
 .window-badges { display: flex; align-items: center; gap: 8px; }
 .window-badge { display: flex; align-items: center; gap: 7px; padding: 6px 9px; border: 1px solid #dfe8dc; border-radius: 8px; color: #788677; background: #fff; font-family: 'DM Mono', monospace; font-size: 10px; line-height: 1; white-space: nowrap; }
 .window-badge b { font-family: 'Noto Sans TC', sans-serif; font-size: 8px; letter-spacing: .1em; }
@@ -75,6 +78,11 @@ button { cursor: pointer; }
 .calculation-presets { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 14px; }
 .calculation-presets button { padding: 6px 10px; border: 1px solid #e0e8dc; border-radius: 8px; color: #788677; background: #fff; font-size: 11px; transition: .2s; }
 .calculation-presets button:hover { border-color: #b6c9b6; color: #17201d; } .calculation-presets button.active { border-color: #17201d; color: #fff; background: #17201d; font-weight: 700; }
+.comparison-windows { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.comparison-windows > span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 6px 5px 8px; border: 1px solid color-mix(in srgb, var(--comparison-color) 35%, white); border-radius: 8px; color: #657067; background: #fff; font-family: 'DM Mono', monospace; font-size: 9px; }
+.comparison-windows i { width: 7px; height: 7px; border-radius: 50%; background: var(--comparison-color); }
+.comparison-windows button { display: grid; width: 17px; height: 17px; padding: 0; border: 0; border-radius: 50%; place-items: center; color: #899389; background: #f1f3ee; line-height: 1; }
+.comparison-windows button:hover { color: #fff; background: #c45b5b; }
 .window-slider .window-badges { position: absolute; top: -34px; right: 0; left: 0; display: block; height: 28px; pointer-events: none; }
 .window-slider .window-badge { position: absolute; transform: translateX(-50%); }
 .window-slider { position: relative; height: 54px; margin: 42px 5px 0; }
