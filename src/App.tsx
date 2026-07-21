@@ -110,7 +110,13 @@ function App() {
 
   const currentLine = stock ? analysis.lines.reduce((best, line) => Math.abs(line - stock.price) < Math.abs(best - stock.price) ? line : best, analysis.lines[0]) : 0
   const priceChange = stock ? stock.price - (stock.prices.at(-2) ?? stock.price) : 0
-  const zoneIndex = stock ? analysis.lines.reduce((index, line, lineIndex) => stock.price >= line ? lineIndex : index, 0) : 2
+  const zoneIndex = stock ? (() => {
+    if (stock.price < analysis.lines[0]) return 0
+    if (stock.price < analysis.lines[1]) return 1
+    if (stock.price < analysis.lines[3]) return 2
+    if (stock.price < analysis.lines[4]) return 3
+    return 4
+  })() : 2
   const zone = lineLabels[zoneIndex] ?? '合理'
   const distanceToTrend = stock ? ((stock.price / analysis.lines[2] - 1) * 100) : 0
   const lohuoChannel = useMemo(() => calculateLohuoChannel(stock?.prices ?? []), [stock])
