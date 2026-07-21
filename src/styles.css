@@ -79,7 +79,9 @@ button { cursor: pointer; }
 .window-slider .window-badge { position: absolute; transform: translateX(-50%); }
 .window-slider { position: relative; height: 54px; margin: 42px 5px 0; }
 .window-track { position: absolute; top: 16px; right: 0; left: 0; height: 6px; border-radius: 99px; background: #dfe8dc; box-shadow: inset 0 1px 2px rgba(23,32,29,.08); }
-.window-selected { position: absolute; top: 0; height: 6px; border-radius: 99px; background: linear-gradient(90deg, #6d9b78, #d4774d); box-shadow: 0 2px 8px rgba(212,119,77,.22); }
+.window-selected { position: absolute; top: 0; z-index: 1; height: 6px; border-radius: 99px; cursor: grab; touch-action: none; background: linear-gradient(90deg, #6d9b78, #d4774d); box-shadow: 0 2px 8px rgba(212,119,77,.22); }
+.window-selected::before { position: absolute; inset: -7px 0; content: ''; }
+.window-selected.dragging { cursor: grabbing; }
 .window-slider input { position: absolute; top: 0; left: 0; z-index: 2; width: 100%; height: 24px; margin: 0; appearance: none; pointer-events: none; background: transparent; }
 .window-slider .slider-end { z-index: 3; }
 .window-slider input::-webkit-slider-thumb { width: 20px; height: 20px; appearance: none; pointer-events: auto; cursor: grab; border: 4px solid #fff; border-radius: 50%; background: #d4774d; box-shadow: 0 1px 7px rgba(23,32,29,.28); }
