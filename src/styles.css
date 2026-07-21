@@ -120,7 +120,7 @@ button { cursor: pointer; }
 .data-note { margin-top: 20px; color: #9aa398; font-size: 11px; text-align: center; } code { padding: 2px 4px; border-radius: 4px; color: #788677; background: #eef2eb; }
 .dashboard-note { grid-column: 1 / -1; margin: 0 0 20px; }
 .loading-card, .error-card { width: min(560px, calc(100% - 48px)); margin: 20vh auto; padding: 30px; border: 1px solid #e2e7df; border-radius: 20px; background: #fff; text-align: center; } .pulse-dot { display: inline-block; margin-right: 10px; }
-@media (max-width: 800px) {
+@media (max-width: 1023px) {
   :root { --nav-height: 64px; }
   html { overflow-x: hidden; overflow-y: auto; }
   body { overflow-x: hidden; }
