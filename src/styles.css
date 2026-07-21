@@ -62,7 +62,7 @@ button { cursor: pointer; }
 .price-block { text-align: right; }
 .price-block strong { display: block; font-family: 'DM Mono', monospace; font-size: 35px; letter-spacing: -.07em; }
 .price-block b { display: block; margin-top: 4px; font-size: 13px; }
-.up { color: #3a9569; } .down { color: #d4774d; }
+.up { color: #d85c5c; } .down { color: #3a9569; }
 .chart-toolbar { align-items: center; margin-top: 34px; padding-top: 18px; border-top: 1px solid #f0f2ed; }
 .chart-toolbar b { display: block; font-size: 14px; } .chart-toolbar small { display: block; margin-top: 5px; color: #9aa398; font-size: 11px; }
 .window-control { margin-top: 24px; padding: 14px 16px 10px; border: 1px solid #edf0e9; border-radius: 16px; background: #fafbf8; }
