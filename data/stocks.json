@@ -1,0 +1,105 @@
+{
+  "last_updated_at": "2026-07-24T18:14:58.968883+08:00",
+  "stocks": [
+    {
+      "market": "TWSE",
+      "code": "0050",
+      "name": "元大台灣50"
+    },
+    {
+      "market": "TWSE",
+      "code": "006208",
+      "name": "富邦台50"
+    },
+    {
+      "market": "TWSE",
+      "code": "0056",
+      "name": "元大高股息"
+    },
+    {
+      "market": "TWSE",
+      "code": "00713",
+      "name": "元大台灣高息低波"
+    },
+    {
+      "market": "TPEx",
+      "code": "00751B",
+      "name": "元大AAA至A公司債"
+    },
+    {
+      "market": "TPEx",
+      "code": "00858",
+      "name": "永豐美國500大"
+    },
+    {
+      "market": "TWSE",
+      "code": "00919",
+      "name": "群益台灣精選高息"
+    },
+    {
+      "market": "TWSE",
+      "code": "009824",
+      "name": "群益美國科技巨頭"
+    },
+    {
+      "market": "TWSE",
+      "code": "1216",
+      "name": "統一"
+    },
+    {
+      "market": "TWSE",
+      "code": "2317",
+      "name": "鴻海"
+    },
+    {
+      "market": "TWSE",
+      "code": "2618",
+      "name": "長榮航"
+    },
+    {
+      "market": "TWSE",
+      "code": "2881",
+      "name": "富邦金"
+    },
+    {
+      "market": "TWSE",
+      "code": "2002",
+      "name": "中鋼"
+    },
+    {
+      "market": "TWSE",
+      "code": "2603",
+      "name": "長榮"
+    },
+    {
+      "market": "TWSE",
+      "code": "1301",
+      "name": "台塑"
+    },
+    {
+      "market": "TWSE",
+      "code": "6505",
+      "name": "台塑化"
+    },
+    {
+      "market": "TWSE",
+      "code": "2408",
+      "name": "南亞科"
+    },
+    {
+      "market": "TWSE",
+      "code": "3481",
+      "name": "群創"
+    },
+    {
+      "market": "TWSE",
+      "code": "2409",
+      "name": "友達"
+    },
+    {
+      "market": "TWSE",
+      "code": "8926",
+      "name": "台汽電"
+    }
+  ]
+}
