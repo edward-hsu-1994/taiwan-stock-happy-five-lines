@@ -44,3 +44,4 @@ jobs:
           git add public/data
           git commit -m "chore(data): update daily stock prices"
           git push
+

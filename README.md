@@ -96,7 +96,7 @@ make clean    # Remove build output and temporary files
 針對 Yahoo Finance 的瞬時錯誤（HTTP 429、連線中斷等），腳本會在 fetch 階段對單檔做最多 3 次嘗試，前兩次重試前分別 sleep 1 秒與 2 秒；若仍失敗，該檔會被記為錯誤但不會中斷整批。執行結束時：
 
 - 全部成功：以 `0` 退出，並更新 `stocks.json` 的 `last_updated_at`。
-- 部分失敗：成功的檔案已寫入磁碟、`stocks.json` 的 `last_updated_at` 會更新，但腳本以非零退出，stderr 會列出失敗的股票代號；下次再執行即可補齊缺失檔案。
+- 部分失敗：成功的檔案已寫入磁碟、`stocks.json` 的 `last_updated_at` 會更新；腳本會以成功結束並在 stderr 列出失敗的股票代號，讓 GitHub Actions 提交並部署有效資料。下次執行即可補齊缺失檔案。
 - 全部失敗：不更新 `last_updated_at`、以非零退出，stderr 列出所有失敗原因。
 
 因此單日失敗只會留下「缺口」而非「整天空窗」，下游排程（GitHub Actions 等）可在下一輪自動補齊。
