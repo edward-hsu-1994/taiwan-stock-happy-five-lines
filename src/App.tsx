@@ -529,7 +529,7 @@ function App() {
           <p className="data-note dashboard-note">
             資料來源：{stock?.source ?? '—'} · {(stock?.data.length ?? 0).toLocaleString()} 筆日收盤價。
             <br />最後更新時間：{formattedLastUpdatedAt}
-            <br />標準差五線以最近一年半歷史價格的線性趨勢與波動推導為初始基準，可拖曳調整計算期間，不代表投資建議。
+            <br />標準差五線依目前選定期間的線性趨勢與波動推導，可拖曳調整計算期間，不代表投資建議。
           </p>
         </section>
       </div>
