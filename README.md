@@ -37,17 +37,17 @@ make dev
 ```bash
 make build    # Create the production bundle
 make preview  # Preview the production bundle
-make lint     # Run the TypeScript check
+make lint     # Run ESLint and the TypeScript check
+make test     # Run the Vitest unit tests (pure functions in src/data)
 make fetch    # Fetch one latest close per watchlist stock
 make backfill START_DATE=2026-01-01 END_DATE=2026-07-19  # Fill a date range
 make clean    # Remove build output and temporary files
-```
 
 ## 後續接 API 建議
 
 1. 將 `src/data/stocks.ts` 的 mock data 改成 `src/services/stockApi.ts`。
 2. 建立 API response type，將行情、財報與估值計算分開。
-3. 將標準差五線計算放在純函式中，補上 Vitest 測試。
+3. ~~將標準差五線計算放在純函式中，補上 Vitest 測試。~~ 已完成：`src/data/stocks.ts` 為純函式，測試在 `src/data/stocks.test.ts`（`npm test`）。
 4. 若瀏覽器直接呼叫資料來源遇到 CORS，使用同源 proxy 或後端 API gateway。
 
 ## 關注清單設定
@@ -91,7 +91,15 @@ make clean    # Remove build output and temporary files
 
 ## 拉取每日收盤價
 
-`scripts/fetch_stock_prices.py` 會讀取 `public/data/stocks.json`，預設每檔股票取得一筆最新的已完成交易日收盤價，並寫入 `public/data/{股票代號}.json`。每個 JSON 檔案是 object，股票基本資料放在外層，歷史價格放在 `data` array；每次交易日執行會追加一筆，同一交易日重複執行時會更新該筆資料，不會產生重複紀錄。週末或休市日會使用最近一個已完成交易日，避免寫入虛假的收盤價。
+`scripts/fetch_stock_prices.py` 會讀取 `public/data/stocks.json`，預設每檔股票取得一筆最新的已完成交易日收盤價，並寫入 `public/data/{股票代號}.json`。每個 JSON 檔案是 object：外層包含股票基本資料（`market`、`code`、`name`、`symbol`、`currency`、`source`）以及本次抓取時間戳 `retrieved_at`（ISO 格式，覆蓋既有值）；歷史價格放在 `data` array，每筆 record 只有 `date` 與 `close`（四捨五入至小數第二位），不再重複儲存 `retrieved_at`。每次交易日執行會追加一筆，同一交易日重複執行時會更新該筆資料，不會產生重複紀錄。週末或休市日會使用最近一個已完成交易日，避免寫入虛假的收盤價。讀取既有 JSON 時會自動忽略舊檔案裡的 per-record `retrieved_at`。
+
+針對 Yahoo Finance 的瞬時錯誤（HTTP 429、連線中斷等），腳本會在 fetch 階段對單檔做最多 3 次嘗試，前兩次重試前分別 sleep 1 秒與 2 秒；若仍失敗，該檔會被記為錯誤但不會中斷整批。執行結束時：
+
+- 全部成功：以 `0` 退出，並更新 `stocks.json` 的 `last_updated_at`。
+- 部分失敗：成功的檔案已寫入磁碟、`stocks.json` 的 `last_updated_at` 會更新；腳本會以成功結束並在 stderr 列出失敗的股票代號，讓 GitHub Actions 提交並部署有效資料。下次執行即可補齊缺失檔案。
+- 全部失敗：不更新 `last_updated_at`、以非零退出，stderr 列出所有失敗原因。
+
+因此單日失敗只會留下「缺口」而非「整天空窗」，下游排程（GitHub Actions 等）可在下一輪自動補齊。
 
 若要補齊一段歷史資料，可使用 `backfill` 模式：
 

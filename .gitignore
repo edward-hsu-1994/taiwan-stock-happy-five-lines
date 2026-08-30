@@ -1,4 +1,6 @@
 node_modules/
 dist/
-job/__pycache__/
+__pycache__/
 *.pyc
+.superpowers/
+.DS_Store

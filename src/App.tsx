@@ -1,33 +1,38 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import ReactECharts from 'echarts-for-react'
-import { AnimatedContent } from './components/reactbits/AnimatedContent'
-import { calculateFiveLines, calculateLohuoChannel, calculateLohuoChannelSeries, lineLabels, loadStock, loadWatchlist, type Stock, type WatchlistEntry } from './data/stocks'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { WatchlistPanel } from './components/WatchlistPanel'
+import { WindowControls } from './components/WindowControls'
+import { PositionSidebar } from './components/PositionSidebar'
+import { calculationPeriods, comparisonColors, ranges, type CalculationPeriod, type Range } from './components/periods'
+import {
+  calculateFiveLines,
+  calculateLohuoChannel,
+  calculateLohuoChannelSeries,
+  lineLabels,
+  loadStock,
+  loadWatchlist,
+  resolveDateWindow,
+  type CalculationWindow,
+  type Stock,
+  type WatchlistEntry,
+} from './data/stocks'
+import type * as EChartsCore from 'echarts/core'
+import type { LineSeriesOption } from 'echarts/charts'
+import type { GridComponentOption, MarkLineComponentOption, TooltipComponentOption } from 'echarts/components'
 
-const ranges = { '近一個月': 22, '近三個月': 66, '近一年': 252, '近一年半': 378, '近三年': 756, '近五年': 1260 } as const
-type Range = keyof typeof ranges
-const calculationPeriods = { '近一個月': 22, '近三個月': 66, '近一年': 252, '近一年半': 378, '近三年': 756 } as const
-type CalculationPeriod = keyof typeof calculationPeriods | '自訂範圍'
-type CalculationWindow = { id: number; startDate: string; endDate: string }
-const comparisonColors = ['#5778a4', '#8f63a9', '#2f9c95', '#c48a32', '#c45b72', '#687a3d']
+const StockChart = lazy(() => import('./components/StockChart'))
+type EChartsOption = EChartsCore.ComposeOption<LineSeriesOption | GridComponentOption | MarkLineComponentOption | TooltipComponentOption>
 const comparisonStorageKey = 'five-line-comparison-windows'
 
 const loadComparisonWindows = (): CalculationWindow[] => {
   try {
     const value: unknown = JSON.parse(sessionStorage.getItem(comparisonStorageKey) ?? '[]')
     if (!Array.isArray(value)) return []
-    return value.filter((item): item is CalculationWindow => typeof item?.id === 'number' && typeof item?.startDate === 'string' && typeof item?.endDate === 'string')
+    return value.filter((item): item is CalculationWindow =>
+      typeof item?.id === 'number' && typeof item?.startDate === 'string' && typeof item?.endDate === 'string',
+    )
   } catch {
     return []
   }
-}
-
-const resolveDateWindow = (dates: string[], item: CalculationWindow) => {
-  const start = dates.findIndex((date) => date >= item.startDate)
-  let end = -1
-  for (let index = dates.length - 1; index >= 0; index -= 1) {
-    if (dates[index] <= item.endDate) { end = index; break }
-  }
-  return start >= 0 && end - start >= 2 ? { start, end } : null
 }
 
 const money = (value: number) => value.toLocaleString('zh-TW', { maximumFractionDigits: 2 })
@@ -40,7 +45,9 @@ const routeStock = () => {
 function App() {
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([])
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
-  const [showDisclosure, setShowDisclosure] = useState(() => sessionStorage.getItem('research-disclosure-dismissed') !== 'true')
+  const [showDisclosure, setShowDisclosure] = useState(
+    () => sessionStorage.getItem('research-disclosure-dismissed') !== 'true',
+  )
   const [stock, setStock] = useState<Stock | null>(null)
   const [selectedId, setSelectedId] = useState(() => routeStock()?.code ?? '0050')
   const [range, setRange] = useState<Range>('近三年')
@@ -51,11 +58,28 @@ function App() {
   const [isDraggingWindow, setIsDraggingWindow] = useState(false)
   const windowDrag = useRef({ active: false, pointerX: 0, start: 0, end: 0 })
   const nextWindowId = useRef(Math.max(0, ...savedComparisonWindows.map((item) => item.id)) + 1)
-  const [error, setError] = useState('')
+  const [watchlistError, setWatchlistError] = useState<string | null>(null)
+  const [stockError, setStockError] = useState<string | null>(null)
+  const [watchlistRetryToken, setWatchlistRetryToken] = useState(0)
+  const [stockRetryToken, setStockRetryToken] = useState(0)
 
   useEffect(() => {
-    loadWatchlist().then((payload) => { setWatchlist(payload.stocks); setLastUpdatedAt(payload.last_updated_at ?? null) }).catch(() => setError('股票清單載入失敗，請確認已執行清單同步。'))
-  }, [])
+    let cancelled = false
+    setWatchlistError(null)
+    loadWatchlist()
+      .then((payload) => {
+        if (cancelled) return
+        setWatchlist(payload.stocks)
+        setLastUpdatedAt(payload.last_updated_at ?? null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setWatchlistError('股票清單載入失敗，請確認已執行清單同步。')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [watchlistRetryToken])
 
   useEffect(() => {
     const handleHistoryChange = () => setSelectedId(routeStock()?.code ?? '0050')
@@ -65,14 +89,25 @@ function App() {
 
   useEffect(() => {
     if (!selectedId) return
+    let cancelled = false
     setStock(null)
-    loadStock(selectedId).then((nextStock) => {
-      setStock(nextStock)
-      setCalculationPeriod('近三年')
-      setWindowStart(Math.max(0, nextStock.prices.length - calculationPeriods['近三年']))
-      setWindowEnd(nextStock.prices.length - 1)
-    }).catch(() => setError(`找不到 ${selectedId} 的行情資料。`))
-  }, [selectedId])
+    setStockError(null)
+    loadStock(selectedId)
+      .then((nextStock) => {
+        if (cancelled) return
+        setStock(nextStock)
+        setCalculationPeriod('近三年')
+        setWindowStart(Math.max(0, nextStock.prices.length - calculationPeriods['近三年']))
+        setWindowEnd(nextStock.prices.length - 1)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setStockError(`找不到 ${selectedId} 的行情資料。`)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedId, stockRetryToken])
 
   useEffect(() => {
     sessionStorage.setItem(comparisonStorageKey, JSON.stringify(savedComparisonWindows))
@@ -82,12 +117,19 @@ function App() {
     if (!stock) return
     document.querySelector<HTMLButtonElement>('.watchlist-items button.active')?.scrollIntoView({ block: 'nearest' })
   }, [stock, watchlist])
+
   const analysis = useMemo(() => {
     if (!stock) return { dates: [], prices: [], trendLines: [], lines: [], rSquared: 0, cv: 0, startIndex: 0, endIndex: 0 }
     const start = Math.min(windowStart, Math.max(0, stock.prices.length - 2))
     const end = Math.max(start + 2, Math.min(windowEnd || stock.prices.length - 1, stock.prices.length - 1))
     const prices = stock.prices.slice(start, end + 1)
-    return { ...calculateFiveLines(prices), dates: stock.dates.slice(start, end + 1), prices, startIndex: start, endIndex: end }
+    return {
+      ...calculateFiveLines(prices),
+      dates: stock.dates.slice(start, end + 1),
+      prices,
+      startIndex: start,
+      endIndex: end,
+    }
   }, [stock, windowStart, windowEnd])
 
   const comparisonAnalyses = useMemo(() => {
@@ -102,151 +144,397 @@ function App() {
 
   const visible = useMemo(() => {
     if (!stock) return { dates: [], prices: [], trendLines: [] }
-    const count = ranges[range]
-    const start = Math.max(0, stock.dates.length - count)
-    const trendLines = analysis.trendLines.map((line) => stock.prices.map((_, index) => index >= analysis.startIndex && index <= analysis.endIndex ? line[index - analysis.startIndex] : null))
-    return { dates: stock.dates.slice(start), prices: stock.prices.slice(start), trendLines: trendLines.map((line) => line.slice(start)) }
+    const start = Math.max(0, stock.dates.length - ranges[range])
+    const dates = stock.dates.slice(start)
+    const prices = stock.prices.slice(start)
+    const trendLines = analysis.trendLines.map((line) => {
+      const visibleLine: (number | null)[] = new Array(prices.length).fill(null)
+      const lineStart = Math.max(analysis.startIndex, start)
+      const lineEnd = Math.min(analysis.endIndex, stock.prices.length - 1)
+      if (lineEnd >= lineStart) {
+        for (let index = lineStart; index <= lineEnd; index += 1) {
+          visibleLine[index - start] = line[index - analysis.startIndex]
+        }
+      }
+      return visibleLine
+    })
+    return { dates, prices, trendLines }
   }, [range, stock, analysis])
 
-  const currentLine = stock ? analysis.lines.reduce((best, line) => Math.abs(line - stock.price) < Math.abs(best - stock.price) ? line : best, analysis.lines[0]) : 0
+  const currentLine = stock
+    ? analysis.lines.reduce(
+        (best, line) => (Math.abs(line - stock.price) < Math.abs(best - stock.price) ? line : best),
+        analysis.lines[0],
+      )
+    : 0
   const priceChange = stock ? stock.price - (stock.prices.at(-2) ?? stock.price) : 0
-  const zoneIndex = stock ? (() => {
-    if (stock.price < analysis.lines[0]) return 0
-    if (stock.price < analysis.lines[1]) return 1
-    if (stock.price < analysis.lines[3]) return 2
-    if (stock.price < analysis.lines[4]) return 3
-    return 4
-  })() : 2
+  const zoneIndex = stock
+    ? (() => {
+        if (stock.price < analysis.lines[0]) return 0
+        if (stock.price < analysis.lines[1]) return 1
+        if (stock.price < analysis.lines[3]) return 2
+        if (stock.price < analysis.lines[4]) return 3
+        return 4
+      })()
+    : 2
   const zone = lineLabels[zoneIndex] ?? '合理'
-  const distanceToTrend = stock ? ((stock.price / analysis.lines[2] - 1) * 100) : 0
+  const distanceToTrend = stock ? (stock.price / analysis.lines[2] - 1) * 100 : 0
   const lohuoChannel = useMemo(() => calculateLohuoChannel(stock?.prices ?? []), [stock])
+  const lohuoChannels = useMemo<{ middle: number[]; upper: number[]; lower: number[] }>(
+    () =>
+      stock
+        ? calculateLohuoChannelSeries(stock.prices)
+        : { middle: [], upper: [], lower: [] },
+    [stock],
+  )
   const lohuoSeries = useMemo(() => {
     if (!stock) return { dates: [], prices: [], middle: [], upper: [], lower: [] }
-    const channel = calculateLohuoChannelSeries(stock.prices)
     const start = Math.max(0, stock.prices.length - ranges[range])
     return {
       dates: stock.dates.slice(start),
       prices: stock.prices.slice(start),
-      middle: channel.middle.slice(start),
-      upper: channel.upper.slice(start),
-      lower: channel.lower.slice(start),
+      middle: lohuoChannels.middle.slice(start),
+      upper: lohuoChannels.upper.slice(start),
+      lower: lohuoChannels.lower.slice(start),
     }
-  }, [stock, range])
+  }, [stock, range, lohuoChannels])
 
-  const lohuoOption = useMemo(() => ({
-    animationDuration: 500,
-    grid: { left: 8, right: 18, top: 24, bottom: 8, containLabel: true },
-    tooltip: { trigger: 'axis', backgroundColor: '#17201d', borderWidth: 0, textStyle: { color: '#fff' }, formatter: (items: { axisValue: string; seriesName: string; value: number }[]) => `${items[0]?.axisValue ?? ''}<br/>${items.map((item) => `<b>${item.seriesName} ${money(item.value)}</b>`).join('<br/>')}` },
-    xAxis: { type: 'category', boundaryGap: false, data: lohuoSeries.dates, axisLine: { lineStyle: { color: '#dfe4da' } }, axisLabel: { color: '#8b958b', hideOverlap: true, formatter: (value: string) => value.slice(5) } },
-    yAxis: { type: 'value', scale: true, min: (value: { min: number }) => Math.floor(value.min * .96), max: (value: { max: number }) => Math.ceil(value.max * 1.04), splitLine: { lineStyle: { color: '#edf0e9' } }, axisLabel: { color: '#8b958b', formatter: (value: number) => money(value) } },
-    series: [
-      { name: '收盤價', type: 'line', smooth: .2, showSymbol: false, data: lohuoSeries.prices, lineStyle: { width: 3, color: '#e8895b' }, itemStyle: { color: '#e8895b' } },
-      { name: '上軌 +2σ', type: 'line', showSymbol: false, data: lohuoSeries.upper, lineStyle: { width: 1.5, type: 'dashed', color: '#6d9b78' } },
-      { name: '中軌 20週均線', type: 'line', showSymbol: false, data: lohuoSeries.middle, lineStyle: { width: 2, color: '#d4774d' } },
-      { name: '下軌 -2σ', type: 'line', showSymbol: false, data: lohuoSeries.lower, lineStyle: { width: 1.5, type: 'dashed', color: '#b99a65' } },
-    ],
-  }), [lohuoSeries])
+  const lohuoOption: EChartsOption = useMemo(
+    () =>
+      ({
+        animationDuration: 500,
+        grid: { left: 8, right: 18, top: 24, bottom: 8, containLabel: true },
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: '#17201d',
+          borderWidth: 0,
+          textStyle: { color: '#fff' },
+          formatter: (items: { axisValue: string; seriesName: string; value: number }[]) =>
+            `${items[0]?.axisValue ?? ''}<br/>${items.map((item) => `<b>${item.seriesName} ${money(item.value)}</b>`).join('<br/>')}`,
+        },
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: lohuoSeries.dates,
+          axisLine: { lineStyle: { color: '#dfe4da' } },
+          axisLabel: { color: '#8b958b', hideOverlap: true, formatter: (value: string) => value.slice(5) },
+        },
+        yAxis: {
+          type: 'value',
+          scale: true,
+          min: (value: { min: number }) => Math.floor(value.min * 0.96),
+          max: (value: { max: number }) => Math.ceil(value.max * 1.04),
+          splitLine: { lineStyle: { color: '#edf0e9' } },
+          axisLabel: { color: '#8b958b', formatter: (value: number) => money(value) },
+        },
+        series: [
+          { name: '收盤價', type: 'line', smooth: 0.2, showSymbol: false, data: lohuoSeries.prices, lineStyle: { width: 3, color: '#e8895b' }, itemStyle: { color: '#e8895b' } },
+          { name: '上軌 +2σ', type: 'line', showSymbol: false, data: lohuoSeries.upper, lineStyle: { width: 1.5, type: 'dashed', color: '#6d9b78' } },
+          { name: '中軌 20週均線', type: 'line', showSymbol: false, data: lohuoSeries.middle, lineStyle: { width: 2, color: '#d4774d' } },
+          { name: '下軌 -2σ', type: 'line', showSymbol: false, data: lohuoSeries.lower, lineStyle: { width: 1.5, type: 'dashed', color: '#b99a65' } },
+        ],
+      }) as unknown as EChartsOption,
+    [lohuoSeries],
+  )
 
-  const option = useMemo(() => {
-    if (!stock) return {}
+  const option: EChartsOption = useMemo(() => {
+    if (!stock) return {} as EChartsOption
     const lineSeries = analysis.lines.map((line, index) => ({
       name: lineLabels[index],
       type: 'line',
       data: visible.trendLines[index],
       symbol: 'none',
-      lineStyle: { color: index === 2 ? '#d4774d' : index < 2 ? '#6d9b78' : '#b99a65', width: index === 2 ? 2.5 : 1.5, type: index === 2 ? 'solid' : 'dashed', opacity: index === 2 ? 1 : .75 },
-      label: { show: true, formatter: `${lineLabels[index]} ${money(line)}`, color: index === 2 ? '#d4774d' : '#788677', fontSize: 10, fontWeight: index === 2 ? 700 : 400, position: 'insideEndTop' },
+      lineStyle: {
+        color: index === 2 ? '#d4774d' : index < 2 ? '#6d9b78' : '#b99a65',
+        width: index === 2 ? 2.5 : 1.5,
+        type: index === 2 ? 'solid' : 'dashed',
+        opacity: index === 2 ? 1 : 0.75,
+      },
+      label: {
+        show: true,
+        formatter: `${lineLabels[index]} ${money(line)}`,
+        color: index === 2 ? '#d4774d' : '#788677',
+        fontSize: 10,
+        fontWeight: index === 2 ? 700 : 400,
+        position: 'insideEndTop',
+      },
       tooltip: { show: false },
     }))
     const visibleStart = Math.max(0, stock.prices.length - ranges[range])
+    const visibleLength = stock.prices.length - visibleStart
     const comparisonSeries = comparisonAnalyses.flatMap((item, comparisonIndex) => {
       const color = comparisonColors[comparisonIndex % comparisonColors.length]
       const periodLabel = `${stock.dates[item.start]}～${stock.dates[item.end]}`
-      return item.analysis.trendLines.map((line, lineIndex) => ({
-        name: `比較 ${comparisonIndex + 1} ${periodLabel} ${lineLabels[lineIndex]}`,
-        type: 'line',
-        data: stock.prices.map((_, index) => index >= item.start && index <= item.end ? line[index - item.start] : null).slice(visibleStart),
-        symbol: 'none',
-        lineStyle: { color, width: lineIndex === 2 ? 2.5 : 1.25, type: lineIndex === 2 ? 'solid' : 'dashed', opacity: lineIndex === 2 ? .95 : .55 },
-        label: { show: false },
-        tooltip: { show: false },
-      }))
+      return item.analysis.trendLines.map((line, lineIndex) => {
+        const lineStart = Math.max(item.start, visibleStart)
+        const lineEnd = Math.min(item.end, stock.prices.length - 1)
+        const data: (number | null)[] = new Array(visibleLength).fill(null)
+        if (lineEnd >= lineStart) {
+          for (let index = lineStart; index <= lineEnd; index += 1) {
+            data[index - visibleStart] = line[index - item.start]
+          }
+        }
+        return {
+          name: `比較 ${comparisonIndex + 1} ${periodLabel} ${lineLabels[lineIndex]}`,
+          type: 'line',
+          data,
+          symbol: 'none',
+          lineStyle: { color, width: lineIndex === 2 ? 2.5 : 1.25, type: lineIndex === 2 ? 'solid' : 'dashed', opacity: lineIndex === 2 ? 0.95 : 0.55 },
+          label: { show: false },
+          tooltip: { show: false },
+        }
+      })
     })
     return {
       animationDuration: 500,
       grid: { left: 8, right: 18, top: 24, bottom: 8, containLabel: true },
-      tooltip: { trigger: 'axis', backgroundColor: '#17201d', borderWidth: 0, textStyle: { color: '#fff' }, formatter: (items: { axisValue: string; seriesName: string; value: number }[]) => `${items[0]?.axisValue ?? ''}<br/><b>收盤價 ${money(items.find((item) => item.seriesName === '收盤價')?.value ?? 0)}</b>` },
-      xAxis: { type: 'category', boundaryGap: false, data: visible.dates, axisLine: { lineStyle: { color: '#dfe4da' } }, axisLabel: { color: '#8b958b', hideOverlap: true, formatter: (value: string) => value.slice(5) } },
-      yAxis: { type: 'value', scale: true, min: (value: { min: number }) => Math.floor(value.min * .96), max: (value: { max: number }) => Math.ceil(value.max * 1.04), splitLine: { lineStyle: { color: '#edf0e9' } }, axisLabel: { color: '#8b958b', formatter: (value: number) => money(value) } },
-      series: [{ name: '收盤價', type: 'line', smooth: .2, showSymbol: false, data: visible.prices, lineStyle: { width: 3, color: '#e8895b' }, itemStyle: { color: '#e8895b' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(232,137,91,.25)' }, { offset: 1, color: 'rgba(232,137,91,0)' }] } }, markLine: { silent: true, symbol: 'none', data: [{ yAxis: stock.price, lineStyle: { color: '#17201d', width: 1, type: 'dotted' }, label: { formatter: `目前 ${money(stock.price)}`, color: '#17201d', position: 'insideStartTop' } }] }, }, ...comparisonSeries, ...lineSeries],
-    }
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: '#17201d',
+        borderWidth: 0,
+        textStyle: { color: '#fff' },
+        formatter: (items: { axisValue: string; seriesName: string; value: number }[]) =>
+          `${items[0]?.axisValue ?? ''}<br/><b>收盤價 ${money(items.find((item) => item.seriesName === '收盤價')?.value ?? 0)}</b>`,
+      },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: visible.dates,
+        axisLine: { lineStyle: { color: '#dfe4da' } },
+        axisLabel: { color: '#8b958b', hideOverlap: true, formatter: (value: string) => value.slice(5) },
+      },
+      yAxis: {
+        type: 'value',
+        scale: true,
+        min: (value: { min: number }) => Math.floor(value.min * 0.96),
+        max: (value: { max: number }) => Math.ceil(value.max * 1.04),
+        splitLine: { lineStyle: { color: '#edf0e9' } },
+        axisLabel: { color: '#8b958b', formatter: (value: number) => money(value) },
+      },
+      series: [
+        {
+          name: '收盤價',
+          type: 'line',
+          smooth: 0.2,
+          showSymbol: false,
+          data: visible.prices,
+          lineStyle: { width: 3, color: '#e8895b' },
+          itemStyle: { color: '#e8895b' },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(232,137,91,.25)' },
+                { offset: 1, color: 'rgba(232,137,91,0)' },
+              ],
+            },
+          },
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            data: [
+              {
+                yAxis: stock.price,
+                lineStyle: { color: '#17201d', width: 1, type: 'dotted' },
+                label: { formatter: `目前 ${money(stock.price)}`, color: '#17201d', position: 'insideStartTop' },
+              },
+            ],
+          },
+        },
+        ...comparisonSeries,
+        ...lineSeries,
+      ],
+    } as unknown as EChartsOption
   }, [stock, visible, analysis, range, comparisonAnalyses])
 
-  function chooseStock(item: WatchlistEntry) {
+  const chooseStock = (item: WatchlistEntry) => {
     window.history.pushState({}, '', `/${item.market}/${item.code}`)
     setSelectedId(item.code)
   }
 
-  function dismissDisclosure() {
+  const dismissDisclosure = () => {
     sessionStorage.setItem('research-disclosure-dismissed', 'true')
     setShowDisclosure(false)
   }
 
-  function startWindowDrag(event: ReactPointerEvent<HTMLSpanElement>) {
+  const startWindowDrag = (event: ReactPointerEvent<HTMLSpanElement>) => {
     windowDrag.current = { active: true, pointerX: event.clientX, start: windowStart, end: windowEnd }
     event.currentTarget.setPointerCapture(event.pointerId)
     setIsDraggingWindow(true)
   }
-
-  function moveWindowDrag(event: ReactPointerEvent<HTMLSpanElement>) {
-    if (!windowDrag.current.active) return
+  const moveWindowDrag = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (!windowDrag.current.active || !stock) return
     const trackWidth = event.currentTarget.parentElement?.clientWidth ?? 0
     if (!trackWidth) return
     const drag = windowDrag.current
-    const requestedDelta = Math.round((event.clientX - drag.pointerX) / trackWidth * sliderMax)
+    const sliderMax = Math.max(1, stock.prices.length - 1)
+    const requestedDelta = Math.round(((event.clientX - drag.pointerX) / trackWidth) * sliderMax)
     const delta = Math.max(-drag.start, Math.min(sliderMax - drag.end, requestedDelta))
     setCalculationPeriod('自訂範圍')
     setWindowStart(drag.start + delta)
     setWindowEnd(drag.end + delta)
   }
-
-  function stopWindowDrag(event: ReactPointerEvent<HTMLSpanElement>) {
+  const stopWindowDrag = (event: ReactPointerEvent<HTMLSpanElement>) => {
     windowDrag.current.active = false
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     setIsDraggingWindow(false)
   }
 
-  function addComparisonWindow() {
+  const addComparisonWindow = () => {
     if (!stock) return
     const startDate = stock.dates[windowStart]
     const endDate = stock.dates[windowEnd]
     if (savedComparisonWindows.some((item) => item.startDate === startDate && item.endDate === endDate)) return
     setComparisonWindows((items) => [...items, { id: nextWindowId.current++, startDate, endDate }])
   }
-
-  function removeComparisonWindow(id: number) {
+  const removeComparisonWindow = (id: number) => {
     setComparisonWindows((items) => items.filter((item) => item.id !== id))
   }
 
-  if (error) return <main className="page-shell"><div className="error-card">{error}</div></main>
-  if (!stock) return <main className="page-shell"><div className="loading-card"><span className="pulse-dot" />正在讀取靜態行情資料…</div></main>
-  const sliderMax = Math.max(1, stock.prices.length - 1)
-  const startPercent = (windowStart / sliderMax) * 100
-  const endPercent = (windowEnd / sliderMax) * 100
-  const comparisonWindows = savedComparisonWindows.flatMap((item) => {
-    const resolved = resolveDateWindow(stock.dates, item)
-    return resolved ? [{ ...item, ...resolved }] : []
-  })
-  const currentWindowIsSaved = savedComparisonWindows.some((item) => item.startDate === stock.dates[windowStart] && item.endDate === stock.dates[windowEnd])
-  const formattedLastUpdatedAt = lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '—'
+  const sliderMax = stock ? Math.max(1, stock.prices.length - 1) : 0
+  const comparisonWindows = stock
+    ? savedComparisonWindows.flatMap((item) => {
+        const resolved = resolveDateWindow(stock.dates, item)
+        return resolved ? [{ ...item, ...resolved }] : []
+      })
+    : []
+  const currentWindowIsSaved = stock
+    ? savedComparisonWindows.some((item) => item.startDate === stock.dates[windowStart] && item.endDate === stock.dates[windowEnd])
+    : false
+  const formattedLastUpdatedAt = lastUpdatedAt
+    ? new Date(lastUpdatedAt).toLocaleString('zh-TW', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    : '—'
 
-  return <main className="page-shell">
-    <nav className="topbar"><div className="brand"><span className="brand-mark">EH</span><span className="font-display">均值回歸的標準差五線分析</span><span className="nav-tagline">把每日收盤價整理成一張有節奏的價格地圖。先看位置，再決定自己的投資步調。</span></div><span className="status-pill"><span /> UPDATED DAILY · {stock.source}</span></nav>
-    <div className="content-layout"><aside className="watchlist-panel"><div className="watchlist-heading"><span>WATCHLIST</span><b>股票清單</b></div><div className="watchlist-items">{watchlist.map((item) => <button key={`${item.market}-${item.code}`} className={item.code === stock.code ? 'active' : ''} onClick={() => chooseStock(item)}><span><b>{item.code}</b><em>{item.name}</em></span><small>{item.market}</small></button>)}</div></aside><section className="dashboard">{showDisclosure && <div className="research-disclosure"><div><b>個人研究練習</b><span>本工具基於統計學的線性趨勢與標準差理論整理股價位置，僅供學習與研究參考。</span><small>免責聲明：不構成投資建議、買賣邀約或報酬保證；投資前請自行判斷並承擔風險。</small></div><button aria-label="關閉研究聲明" onClick={dismissDisclosure}>×</button></div>}<div className="main-card"><div className="card-heading"><div><div className="title-row"><h2>{stock.name}</h2><span>{stock.code}</span></div><p>{stock.market} · {stock.symbol} · {stock.data.at(-1)?.date} 收盤</p></div><div className="price-block"><strong>{money(stock.price)}</strong><b className={stock.change >= 0 ? 'up' : 'down'}>{stock.change >= 0 ? '▲' : '▼'} {priceChange >= 0 ? '+' : ''}{money(priceChange)}（{stock.change >= 0 ? '+' : '-'}{Math.abs(stock.change).toFixed(2)}%）</b></div></div><div className="window-control"><div className="window-heading"><div><b>標準差五線計算期間</b><small>調整目前期間，並可加入多組期間同時比較</small></div><button className="add-comparison" disabled={currentWindowIsSaved} onClick={addComparisonWindow}>{currentWindowIsSaved ? '已加入目前期間' : '＋ 加入目前期間'}</button></div><div className="calculation-presets">{Object.entries(calculationPeriods).map(([label, count]) => <button key={label} className={calculationPeriod === label ? 'active' : ''} onClick={() => { setCalculationPeriod(label as CalculationPeriod); setWindowStart(Math.max(0, stock.prices.length - count)); setWindowEnd(stock.prices.length - 1) }}>{label}</button>)}</div>{comparisonWindows.length > 0 && <div className="comparison-windows">{comparisonWindows.map((item, index) => <span key={item.id} style={{ '--comparison-color': comparisonColors[index % comparisonColors.length] } as CSSProperties}><i />比較 {index + 1}：{stock.dates[item.start]}～{stock.dates[item.end]}<button aria-label={`移除比較期間 ${index + 1}`} onClick={() => removeComparisonWindow(item.id)}>×</button></span>)}</div>}<div className="window-slider"><div className="window-badges"><span className="window-badge start" style={{ left: `${startPercent}%` }}><b>START</b>{stock.dates[windowStart]}</span><span className="window-badge end" style={{ left: `${endPercent}%` }}><b>END</b>{stock.dates[windowEnd]}</span></div><div className="window-track"><span className={`window-selected${isDraggingWindow ? ' dragging' : ''}`} aria-label="拖曳整個五線譜計算期間" role="slider" style={{ left: `${startPercent}%`, width: `${Math.max(0, endPercent - startPercent)}%` }} onPointerDown={startWindowDrag} onPointerMove={moveWindowDrag} onPointerUp={stopWindowDrag} onPointerCancel={stopWindowDrag} /></div><input className="slider-start" aria-label="調整五線譜開始日期" type="range" min="0" max={sliderMax} value={windowStart} onChange={(event) => { setCalculationPeriod('自訂範圍'); setWindowStart(Math.min(Number(event.target.value), windowEnd - 2)) }} /><input className="slider-end" aria-label="調整五線譜結束日期" type="range" min="0" max={sliderMax} value={windowEnd} onChange={(event) => { setCalculationPeriod('自訂範圍'); setWindowEnd(Math.max(Number(event.target.value), windowStart + 2)) }} /></div></div><div className="chart-toolbar"><div><b>價格與長期標準差五線</b><small>五條通道線沿選定期間的趨勢延伸</small></div><div className="range-tabs">{Object.keys(ranges).map((item) => <button key={item} onClick={() => setRange(item as Range)} className={range === item ? 'active' : ''}>{item}</button>)}</div></div><ReactECharts option={option} notMerge={true} style={{ height: 360 }} /><div className="chart-toolbar secondary-chart-toolbar"><div><b>價格與20週標準差通道</b><small>20 週均線與上下 2σ 通道</small></div></div><ReactECharts option={lohuoOption} style={{ height: 320 }} /></div>
-
-      <aside className="sidebar"><AnimatedContent className="position-card"><div className="position-top"><div><small>目前價格位置</small><h3>{zone}</h3></div><span className="compass">⌁</span></div><div className="five-meter">{analysis.lines.map((line, index) => <div key={line} className={analysis.lines[index] === currentLine ? 'selected' : ''} style={{ left: `${index * 25}%` }}><i /><small>{lineLabels[index]}</small></div>)}<span className="current-pin" style={{ left: `${Math.max(0, Math.min(100, (stock.price - analysis.lines[0]) / (analysis.lines[4] - analysis.lines[0]) * 100))}%` }} /></div><div className="position-foot"><span>低估</span><span>合理</span><span>高估</span></div><p className="position-note">距離中線 <b>{distanceToTrend >= 0 ? '+' : ''}{distanceToTrend.toFixed(1)}%</b></p></AnimatedContent><AnimatedContent className="line-card"><div className="section-title"><h3>標準差五線</h3><span>R² {(analysis.rSquared * 100).toFixed(0)}% · CV {(analysis.cv * 100).toFixed(1)}%</span></div>{analysis.lines.map((line, index) => <div className={`line-item ${index === 2 ? 'fair' : ''}`} key={line}><span className="line-dot" /><span>{lineLabels[index]}</span><strong>{money(line)}</strong></div>)}<p className="method-note">依目前拖曳選定的期間做線性回歸：趨勢線 TL 上下各加減 1SD、2SD。R² 越高，趨勢參考性越強。</p></AnimatedContent><AnimatedContent className="line-card lohuo-card"><div className="section-title"><h3>20週標準差通道</h3><span>20 週均線 · {lohuoChannel.period} 日</span></div><div className="line-item"><span className="line-dot" /><span>+2σ</span><strong>{money(lohuoChannel.upper)}</strong></div><div className="line-item fair"><span className="line-dot" /><span>20週均線</span><strong>{money(lohuoChannel.middle)}</strong></div><div className="line-item"><span className="line-dot" /><span>-2σ</span><strong>{money(lohuoChannel.lower)}</strong></div><div className="channel-metrics"><span>Bandwidth <b>{(lohuoChannel.bandwidth * 100).toFixed(1)}%</b></span><span>%b <b>{lohuoChannel.percentB.toFixed(2)}</b></span></div><p className="method-note">以最近 20 週收盤價計算中軌與上下 2 倍標準差。%b 越接近 1 越靠近上軌，越接近 0 越靠近下軌。</p></AnimatedContent></aside>
-    <p className="data-note dashboard-note">資料來源：{stock.source} · {stock.data.length.toLocaleString()} 筆日收盤價。<br />最後更新時間：{formattedLastUpdatedAt}<br />標準差五線以完整歷史價格的長期趨勢與波動推導，不代表投資建議。</p></section></div>
-  </main>
+  return (
+    <main className="page-shell">
+      <nav className="topbar">
+        <div className="brand">
+          <span className="brand-mark">EH</span>
+          <span className="font-display">均值回歸的標準差五線分析</span>
+          <span className="nav-tagline">把每日收盤價整理成一張有節奏的價格地圖。先看位置，再決定自己的投資步調。</span>
+        </div>
+        <span className="status-pill"><span /> UPDATED DAILY · {stock?.source ?? '—'}</span>
+      </nav>
+      <div className="content-layout">
+        <WatchlistPanel
+          watchlist={watchlist}
+          activeCode={stock?.code ?? selectedId}
+          onChoose={chooseStock}
+          onRetry={() => setWatchlistRetryToken((token) => token + 1)}
+          error={watchlistError}
+        />
+        <section className="dashboard">
+          {showDisclosure && (
+            <div className="research-disclosure">
+              <div>
+                <b>個人研究練習</b>
+                <span>本工具基於統計學的線性趨勢與標準差理論整理股價位置，僅供學習與研究參考。</span>
+                <small>免責聲明：不構成投資建議、買賣邀約或報酬保證；投資前請自行判斷並承擔風險。</small>
+              </div>
+              <button aria-label="關閉研究聲明" onClick={dismissDisclosure}>×</button>
+            </div>
+          )}
+          {stockError ? (
+            <div className="main-card">
+              <div className="error-card main-error">
+                {stockError}
+                <button type="button" onClick={() => setStockRetryToken((token) => token + 1)}>重試</button>
+              </div>
+            </div>
+          ) : !stock ? (
+            <div className="loading-card"><span className="pulse-dot" />正在讀取靜態行情資料…</div>
+          ) : (
+            <div className="main-card">
+              <div className="card-heading">
+                <div>
+                  <div className="title-row">
+                    <h2>{stock.name}</h2>
+                    <span>{stock.code}</span>
+                  </div>
+                  <p>{stock.market} · {stock.symbol} · {stock.data.at(-1)?.date} 收盤</p>
+                </div>
+                <div className="price-block">
+                  <strong>{money(stock.price)}</strong>
+                  <b className={stock.change >= 0 ? 'up' : 'down'}>
+                    {stock.change >= 0 ? '▲' : '▼'} {priceChange >= 0 ? '+' : ''}{money(priceChange)}（{stock.change >= 0 ? '+' : '-'}{Math.abs(stock.change).toFixed(2)}%）
+                  </b>
+                </div>
+              </div>
+                  <WindowControls
+                    dates={stock.dates}
+                    windowStart={windowStart}
+                    windowEnd={windowEnd}
+                    sliderMax={sliderMax}
+                    calculationPeriod={calculationPeriod}
+                    setCalculationPeriod={setCalculationPeriod}
+                    setWindowStart={setWindowStart}
+                    setWindowEnd={setWindowEnd}
+                    comparisonWindows={comparisonWindows}
+                    onAddComparison={addComparisonWindow}
+                    onRemoveComparison={removeComparisonWindow}
+                    currentWindowIsSaved={currentWindowIsSaved}
+                    isDraggingWindow={isDraggingWindow}
+                    onPointerDown={startWindowDrag}
+                    onPointerMove={moveWindowDrag}
+                    onPointerUp={stopWindowDrag}
+                  />
+                  <div className="chart-toolbar">
+                    <div>
+                      <b>價格與長期標準差五線</b>
+                      <small>五條通道線沿選定期間的趨勢延伸</small>
+                    </div>
+                    <div className="range-tabs">
+                      {(Object.keys(ranges) as Range[]).map((item) => (
+                        <button key={item} onClick={() => setRange(item)} className={range === item ? 'active' : ''}>{item}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <Suspense fallback={<div className="chart-fallback" style={{ height: 360 }} />}>
+                    <StockChart option={option} notMerge={true} style={{ height: 360 }} />
+                  </Suspense>
+                  <div className="chart-toolbar secondary-chart-toolbar">
+                    <div>
+                      <b>價格與20週標準差通道</b>
+                      <small>20 週均線與上下 2σ 通道</small>
+                    </div>
+                  </div>
+                  <Suspense fallback={<div className="chart-fallback" style={{ height: 320 }} />}>
+                    <StockChart option={lohuoOption} style={{ height: 320 }} />
+                  </Suspense>
+            </div>
+          )}
+          {stock && (
+            <PositionSidebar
+              stock={stock}
+              analysis={analysis}
+              currentLine={currentLine}
+              zone={zone}
+              distanceToTrend={distanceToTrend}
+              lohuoChannel={lohuoChannel}
+              money={money}
+            />
+          )}
+          <p className="data-note dashboard-note">
+            資料來源：{stock?.source ?? '—'} · {(stock?.data.length ?? 0).toLocaleString()} 筆日收盤價。
+            <br />最後更新時間：{formattedLastUpdatedAt}
+            <br />標準差五線依目前選定期間的線性趨勢與波動推導，可拖曳調整計算期間，不代表投資建議。
+          </p>
+        </section>
+      </div>
+    </main>
+  )
 }
 
 export default App

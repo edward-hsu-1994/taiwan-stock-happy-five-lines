@@ -5,18 +5,19 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time as time_module
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = PROJECT_ROOT / "public" / "data" / "stocks.json"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,7 +63,7 @@ def load_watchlist(config_path: Path) -> list[dict[str, str]]:
         market = str(stock.get("market", ""))
         code = str(stock.get("code", ""))
         name = str(stock.get("name", ""))
-        if market not in {"TWSE", "TPEx", "Emerging"}:
+        if market not in {"TWSE", "TPEx"}:
             raise ValueError(f"Unsupported market '{market}' for {code}")
         if not code.isalnum() or not name:
             raise ValueError(f"Invalid stock entry: {stock}")
@@ -70,10 +71,9 @@ def load_watchlist(config_path: Path) -> list[dict[str, str]]:
     return validated
 
 
-def update_watchlist_timestamp(config_path: Path, watchlist: list[dict[str, str]]) -> None:
+def update_watchlist_timestamp(config_path: Path) -> None:
     with config_path.open(encoding="utf-8") as config_file:
         config = json.load(config_file) or {}
-    config["stocks"] = watchlist
     config["last_updated_at"] = datetime.now(TAIPEI_TZ).isoformat()
     temporary_path = config_path.with_suffix(".json.tmp")
     with temporary_path.open("w", encoding="utf-8") as config_file:
@@ -135,6 +135,20 @@ def fetch_chart_rows(symbol: str, query_params: dict[str, str]) -> list[tuple[st
     return rows
 
 
+def fetch_with_retry(symbol: str, fetch_fn: Callable[[str], list[tuple[str, float]]]) -> list[tuple[str, float]]:
+    delays = (1, 2)
+    last_error: OSError | RuntimeError | None = None
+    for delay in (0, *delays):
+        if delay:
+            time_module.sleep(delay)
+        try:
+            return fetch_fn(symbol)
+        except (OSError, RuntimeError) as error:
+            last_error = error
+    assert last_error is not None
+    raise last_error
+
+
 def fetch_latest_close(symbol: str) -> list[tuple[str, float]]:
     rows = fetch_chart_rows(symbol, {"range": "5d", "interval": "1d", "includePrePost": "false"})
     return rows[-1:]
@@ -161,18 +175,22 @@ def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float]], ou
         with output_path.open(encoding="utf-8") as data_file:
             existing = json.load(data_file)
         if isinstance(existing, list):
-            records = existing
+            raw_records = existing
         elif isinstance(existing, dict) and isinstance(existing.get("data"), list):
-            records = existing["data"]
+            raw_records = existing["data"]
         else:
             raise ValueError(f"Expected a legacy JSON array or object with a data array in {output_path}")
+        records = [
+            {"date": str(item["date"]), "close": round(float(item["close"]), 2)}
+            for item in raw_records
+            if isinstance(item, dict) and "date" in item and "close" in item
+        ]
 
     retrieved_at = datetime.now(timezone.utc).isoformat()
     for trading_date, close in rows:
         record = {
             "date": trading_date,
-            "close": close,
-            "retrieved_at": retrieved_at,
+            "close": round(close, 2),
         }
         records = [item for item in records if item.get("date") != trading_date]
         records.append(record)
@@ -184,6 +202,7 @@ def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float]], ou
         "symbol": yahoo_symbol(stock),
         "currency": "TWD",
         "source": "Yahoo Finance",
+        "retrieved_at": retrieved_at,
         "data": records,
     }
     temporary_path = output_path.with_suffix(".json.tmp")
@@ -202,14 +221,19 @@ def main() -> int:
         for removed_path in removed_paths:
             print(f"Removed unwatched stock data: {removed_path}")
         errors: list[str] = []
+        successes = 0
         for stock in watchlist:
             symbol = yahoo_symbol(stock)
             try:
                 if args.mode == "latest":
-                    rows = fetch_latest_close(symbol)
+                    rows = fetch_with_retry(symbol, fetch_latest_close)
                 else:
-                    rows = fetch_date_range(symbol, args.start_date, args.end_date)
+                    rows = fetch_with_retry(
+                        symbol,
+                        lambda code: fetch_date_range(code, args.start_date, args.end_date),
+                    )
                 output_path = write_daily_records(stock, rows, args.output_dir)
+                successes += 1
                 if args.mode == "latest":
                     trading_date, close = rows[0]
                     print(f"{symbol}: {trading_date} close={close:g} -> {output_path}")
@@ -217,11 +241,25 @@ def main() -> int:
                     print(f"{symbol}: {len(rows)} daily closes -> {output_path}")
             except (OSError, RuntimeError) as error:
                 errors.append(f"{symbol}: {error}")
-        if errors:
+        if errors and successes == 0:
             for error in errors:
                 print(f"Error: {error}", file=sys.stderr)
+            print(
+                f"All {len(errors)} stock(s) failed; watchlist timestamp not updated.",
+                file=sys.stderr,
+            )
             return 1
-        update_watchlist_timestamp(args.config, watchlist)
+        if errors:
+            update_watchlist_timestamp(args.config)
+            print(f"Updated watchlist timestamp: {args.config}")
+            for error in errors:
+                print(f"Warning: {error}", file=sys.stderr)
+            print(
+                f"Warning: {len(errors)} stock(s) failed after retries; partial data written.",
+                file=sys.stderr,
+            )
+            return 0
+        update_watchlist_timestamp(args.config)
         print(f"Updated watchlist timestamp: {args.config}")
     except (OSError, ValueError, RuntimeError) as error:
         print(f"Error: {error}", file=sys.stderr)
