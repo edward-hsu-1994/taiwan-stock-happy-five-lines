@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { WatchlistPanel } from './components/WatchlistPanel'
-import { WindowControls, calculationPeriods, comparisonColors, ranges, type CalculationPeriod, type Range } from './components/WindowControls'
+import { WindowControls } from './components/WindowControls'
 import { PositionSidebar } from './components/PositionSidebar'
+import { calculationPeriods, comparisonColors, ranges, type CalculationPeriod, type Range } from './components/periods'
 import {
   calculateFiveLines,
   calculateLohuoChannel,

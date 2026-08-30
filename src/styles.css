@@ -119,6 +119,9 @@ button { cursor: pointer; }
 .chart-fallback { width: 100%; border-radius: 16px; background: linear-gradient(90deg, #fafbf8 0%, #eef2eb 50%, #fafbf8 100%); background-size: 200% 100%; animation: chart-fallback-pulse 1.4s ease-in-out infinite; }
 @keyframes chart-fallback-pulse { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 .dashboard-note { grid-column: 1 / -1; margin: 0 0 20px; }
+.watchlist-loading, .watchlist-error, .main-error { padding: 18px; border: 1px solid #e2e7df; border-radius: 16px; background: #fff; font-size: 12px; line-height: 1.6; }
+.watchlist-error button, .main-error button { display: inline-block; margin-top: 10px; padding: 5px 12px; border: 1px solid #17201d; border-radius: 8px; color: #fff; background: #17201d; font-size: 11px; font-weight: 700; cursor: pointer; }
+.main-error { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 40px 18px; margin: 24px 0; text-align: center; }
 .loading-card, .error-card { width: min(560px, calc(100% - 48px)); margin: 20vh auto; padding: 30px; border: 1px solid #e2e7df; border-radius: 20px; background: #fff; text-align: center; } .pulse-dot { display: inline-block; margin-right: 10px; }
 @media (max-width: 1023px) {
   :root { --nav-height: 64px; }
