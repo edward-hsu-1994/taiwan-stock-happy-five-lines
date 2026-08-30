@@ -37,17 +37,17 @@ make dev
 ```bash
 make build    # Create the production bundle
 make preview  # Preview the production bundle
-make lint     # Run the TypeScript check
+make lint     # Run ESLint and the TypeScript check
+make test     # Run the Vitest unit tests (pure functions in src/data)
 make fetch    # Fetch one latest close per watchlist stock
 make backfill START_DATE=2026-01-01 END_DATE=2026-07-19  # Fill a date range
 make clean    # Remove build output and temporary files
-```
 
 ## 後續接 API 建議
 
 1. 將 `src/data/stocks.ts` 的 mock data 改成 `src/services/stockApi.ts`。
 2. 建立 API response type，將行情、財報與估值計算分開。
-3. 將標準差五線計算放在純函式中，補上 Vitest 測試。
+3. ~~將標準差五線計算放在純函式中，補上 Vitest 測試。~~ 已完成：`src/data/stocks.ts` 為純函式，測試在 `src/data/stocks.test.ts`（`npm test`）。
 4. 若瀏覽器直接呼叫資料來源遇到 CORS，使用同源 proxy 或後端 API gateway。
 
 ## 關注清單設定
