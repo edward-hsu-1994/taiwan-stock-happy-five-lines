@@ -106,10 +106,21 @@ function App() {
 
   const visible = useMemo(() => {
     if (!stock) return { dates: [], prices: [], trendLines: [] }
-    const count = ranges[range]
-    const start = Math.max(0, stock.dates.length - count)
-    const trendLines = analysis.trendLines.map((line) => stock.prices.map((_, index) => index >= analysis.startIndex && index <= analysis.endIndex ? line[index - analysis.startIndex] : null))
-    return { dates: stock.dates.slice(start), prices: stock.prices.slice(start), trendLines: trendLines.map((line) => line.slice(start)) }
+    const start = Math.max(0, stock.dates.length - ranges[range])
+    const dates = stock.dates.slice(start)
+    const prices = stock.prices.slice(start)
+    const trendLines = analysis.trendLines.map((line) => {
+      const visibleLine: (number | null)[] = new Array(prices.length).fill(null)
+      const lineStart = Math.max(analysis.startIndex, start)
+      const lineEnd = Math.min(analysis.endIndex, stock.prices.length - 1)
+      if (lineEnd >= lineStart) {
+        for (let index = lineStart; index <= lineEnd; index += 1) {
+          visibleLine[index - start] = line[index - analysis.startIndex]
+        }
+      }
+      return visibleLine
+    })
+    return { dates, prices, trendLines }
   }, [range, stock, analysis])
 
   const currentLine = stock ? analysis.lines.reduce((best, line) => Math.abs(line - stock.price) < Math.abs(best - stock.price) ? line : best, analysis.lines[0]) : 0
@@ -124,18 +135,21 @@ function App() {
   const zone = lineLabels[zoneIndex] ?? '合理'
   const distanceToTrend = stock ? ((stock.price / analysis.lines[2] - 1) * 100) : 0
   const lohuoChannel = useMemo(() => calculateLohuoChannel(stock?.prices ?? []), [stock])
+  const lohuoChannels = useMemo<{ middle: number[]; upper: number[]; lower: number[] }>(
+    () => stock ? calculateLohuoChannelSeries(stock.prices) : { middle: [], upper: [], lower: [] },
+    [stock],
+  )
   const lohuoSeries = useMemo(() => {
     if (!stock) return { dates: [], prices: [], middle: [], upper: [], lower: [] }
-    const channel = calculateLohuoChannelSeries(stock.prices)
     const start = Math.max(0, stock.prices.length - ranges[range])
     return {
       dates: stock.dates.slice(start),
       prices: stock.prices.slice(start),
-      middle: channel.middle.slice(start),
-      upper: channel.upper.slice(start),
-      lower: channel.lower.slice(start),
+      middle: lohuoChannels.middle.slice(start),
+      upper: lohuoChannels.upper.slice(start),
+      lower: lohuoChannels.lower.slice(start),
     }
-  }, [stock, range])
+  }, [stock, range, lohuoChannels])
 
   const lohuoOption: EChartsOption = useMemo(() => ({
     animationDuration: 500,
@@ -163,18 +177,29 @@ function App() {
       tooltip: { show: false },
     }))
     const visibleStart = Math.max(0, stock.prices.length - ranges[range])
+    const visibleLength = stock.prices.length - visibleStart
     const comparisonSeries = comparisonAnalyses.flatMap((item, comparisonIndex) => {
       const color = comparisonColors[comparisonIndex % comparisonColors.length]
       const periodLabel = `${stock.dates[item.start]}～${stock.dates[item.end]}`
-      return item.analysis.trendLines.map((line, lineIndex) => ({
-        name: `比較 ${comparisonIndex + 1} ${periodLabel} ${lineLabels[lineIndex]}`,
-        type: 'line',
-        data: stock.prices.map((_, index) => index >= item.start && index <= item.end ? line[index - item.start] : null).slice(visibleStart),
-        symbol: 'none',
-        lineStyle: { color, width: lineIndex === 2 ? 2.5 : 1.25, type: lineIndex === 2 ? 'solid' : 'dashed', opacity: lineIndex === 2 ? .95 : .55 },
-        label: { show: false },
-        tooltip: { show: false },
-      }))
+      return item.analysis.trendLines.map((line, lineIndex) => {
+        const lineStart = Math.max(item.start, visibleStart)
+        const lineEnd = Math.min(item.end, stock.prices.length - 1)
+        const data: (number | null)[] = new Array(visibleLength).fill(null)
+        if (lineEnd >= lineStart) {
+          for (let index = lineStart; index <= lineEnd; index += 1) {
+            data[index - visibleStart] = line[index - item.start]
+          }
+        }
+        return {
+          name: `比較 ${comparisonIndex + 1} ${periodLabel} ${lineLabels[lineIndex]}`,
+          type: 'line',
+          data,
+          symbol: 'none',
+          lineStyle: { color, width: lineIndex === 2 ? 2.5 : 1.25, type: lineIndex === 2 ? 'solid' : 'dashed', opacity: lineIndex === 2 ? .95 : .55 },
+          label: { show: false },
+          tooltip: { show: false },
+        }
+      })
     })
     return {
       animationDuration: 500,

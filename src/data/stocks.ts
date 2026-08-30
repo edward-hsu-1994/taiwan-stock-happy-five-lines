@@ -74,23 +74,26 @@ export function calculateLohuoChannel(prices: number[], period = 100): LohuoChan
 }
 
 export function calculateLohuoChannelSeries(prices: number[], period = 100): { middle: number[]; upper: number[]; lower: number[] } {
-  return prices.map((_, index) => {
-    const channel = calculateLohuoChannel(prices.slice(0, index + 1), period)
-    return { middle: channel.middle, upper: channel.upper, lower: channel.lower }
-  }).reduce((series, channel) => {
-    series.middle.push(channel.middle)
-    series.upper.push(channel.upper)
-    series.lower.push(channel.lower)
-    return series
-  }, { middle: [], upper: [], lower: [] } as { middle: number[]; upper: number[]; lower: number[] })
+  const middle: number[] = []
+  const upper: number[] = []
+  const lower: number[] = []
+  for (let index = 0; index < prices.length; index += 1) {
+    const start = Math.max(0, index + 1 - period)
+    const channel = calculateLohuoChannel(prices.slice(start, index + 1), period)
+    middle.push(channel.middle)
+    upper.push(channel.upper)
+    lower.push(channel.lower)
+  }
+  return { middle, upper, lower }
 }
 
 function normalizeStock(payload: JobStock): Stock {
   const data = payload.data.filter((point) => Number.isFinite(point.close)).sort((a, b) => a.date.localeCompare(b.date))
   const prices = data.map((point) => point.close)
-  const latestDate = new Date(`${data.at(-1)?.date}T00:00:00Z`).getTime()
-  const cutoff = latestDate - 365.25 * 1.5 * 24 * 60 * 60 * 1000
-  const analysisPrices = data.filter((point) => new Date(`${point.date}T00:00:00Z`).getTime() >= cutoff).map((point) => point.close)
+  const latestDate = data.at(-1)?.date ?? ''
+  const cutoffMs = Date.parse(`${latestDate}T00:00:00Z`) - 365.25 * 1.5 * 24 * 60 * 60 * 1000
+  const cutoffISO = new Date(cutoffMs).toISOString().slice(0, 10)
+  const analysisPrices = data.filter((point) => point.date >= cutoffISO).map((point) => point.close)
   const initial = calculateFiveLines(analysisPrices.length > 2 ? analysisPrices : prices)
   const price = prices.at(-1) ?? 0
   const previous = prices.at(-2) ?? price
