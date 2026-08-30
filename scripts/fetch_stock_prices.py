@@ -161,18 +161,22 @@ def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float]], ou
         with output_path.open(encoding="utf-8") as data_file:
             existing = json.load(data_file)
         if isinstance(existing, list):
-            records = existing
+            raw_records = existing
         elif isinstance(existing, dict) and isinstance(existing.get("data"), list):
-            records = existing["data"]
+            raw_records = existing["data"]
         else:
             raise ValueError(f"Expected a legacy JSON array or object with a data array in {output_path}")
+        records = [
+            {"date": str(item["date"]), "close": float(item["close"])}
+            for item in raw_records
+            if isinstance(item, dict) and "date" in item and "close" in item
+        ]
 
     retrieved_at = datetime.now(timezone.utc).isoformat()
     for trading_date, close in rows:
         record = {
             "date": trading_date,
-            "close": close,
-            "retrieved_at": retrieved_at,
+            "close": round(close, 2),
         }
         records = [item for item in records if item.get("date") != trading_date]
         records.append(record)
@@ -184,6 +188,7 @@ def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float]], ou
         "symbol": yahoo_symbol(stock),
         "currency": "TWD",
         "source": "Yahoo Finance",
+        "retrieved_at": retrieved_at,
         "data": records,
     }
     temporary_path = output_path.with_suffix(".json.tmp")
