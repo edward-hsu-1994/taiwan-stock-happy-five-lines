@@ -9,9 +9,9 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
+import time as time_module
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = PROJECT_ROOT / "public" / "data" / "stocks.json"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
@@ -62,7 +62,7 @@ def load_watchlist(config_path: Path) -> list[dict[str, str]]:
         market = str(stock.get("market", ""))
         code = str(stock.get("code", ""))
         name = str(stock.get("name", ""))
-        if market not in {"TWSE", "TPEx", "Emerging"}:
+        if market not in {"TWSE", "TPEx"}:
             raise ValueError(f"Unsupported market '{market}' for {code}")
         if not code.isalnum() or not name:
             raise ValueError(f"Invalid stock entry: {stock}")
@@ -70,10 +70,9 @@ def load_watchlist(config_path: Path) -> list[dict[str, str]]:
     return validated
 
 
-def update_watchlist_timestamp(config_path: Path, watchlist: list[dict[str, str]]) -> None:
+def update_watchlist_timestamp(config_path: Path) -> None:
     with config_path.open(encoding="utf-8") as config_file:
         config = json.load(config_file) or {}
-    config["stocks"] = watchlist
     config["last_updated_at"] = datetime.now(TAIPEI_TZ).isoformat()
     temporary_path = config_path.with_suffix(".json.tmp")
     with temporary_path.open("w", encoding="utf-8") as config_file:
@@ -133,6 +132,23 @@ def fetch_chart_rows(symbol: str, query_params: dict[str, str]) -> list[tuple[st
     if not rows:
         raise RuntimeError(f"No closing price returned for {symbol}")
     return rows
+
+
+def fetch_with_retry(symbol: str, fetch_fn: "callable") -> list[tuple[str, float]]:
+    delays = (1, 2)
+    last_error: Exception | None = None
+    for attempt, delay in enumerate((0, *delays), start=1):
+        if delay:
+            time_module.sleep(delay)
+        try:
+            return fetch_fn(symbol)
+        except (OSError, RuntimeError) as error:
+            last_error = error
+            if attempt > len(delays):
+                raise
+    if last_error is not None:
+        raise last_error
+    return []
 
 
 def fetch_latest_close(symbol: str) -> list[tuple[str, float]]:
@@ -207,14 +223,19 @@ def main() -> int:
         for removed_path in removed_paths:
             print(f"Removed unwatched stock data: {removed_path}")
         errors: list[str] = []
+        successes = 0
         for stock in watchlist:
             symbol = yahoo_symbol(stock)
             try:
                 if args.mode == "latest":
-                    rows = fetch_latest_close(symbol)
+                    rows = fetch_with_retry(symbol, fetch_latest_close)
                 else:
-                    rows = fetch_date_range(symbol, args.start_date, args.end_date)
+                    rows = fetch_with_retry(
+                        symbol,
+                        lambda code: fetch_date_range(code, args.start_date, args.end_date),
+                    )
                 output_path = write_daily_records(stock, rows, args.output_dir)
+                successes += 1
                 if args.mode == "latest":
                     trading_date, close = rows[0]
                     print(f"{symbol}: {trading_date} close={close:g} -> {output_path}")
@@ -222,11 +243,25 @@ def main() -> int:
                     print(f"{symbol}: {len(rows)} daily closes -> {output_path}")
             except (OSError, RuntimeError) as error:
                 errors.append(f"{symbol}: {error}")
-        if errors:
+        if errors and successes == 0:
             for error in errors:
                 print(f"Error: {error}", file=sys.stderr)
+            print(
+                f"All {len(errors)} stock(s) failed; watchlist timestamp not updated.",
+                file=sys.stderr,
+            )
             return 1
-        update_watchlist_timestamp(args.config, watchlist)
+        if errors:
+            update_watchlist_timestamp(args.config)
+            print(f"Updated watchlist timestamp: {args.config}")
+            for error in errors:
+                print(f"Error: {error}", file=sys.stderr)
+            print(
+                f"{len(errors)} stock(s) failed after retries; partial data written.",
+                file=sys.stderr,
+            )
+            return 1
+        update_watchlist_timestamp(args.config)
         print(f"Updated watchlist timestamp: {args.config}")
     except (OSError, ValueError, RuntimeError) as error:
         print(f"Error: {error}", file=sys.stderr)
