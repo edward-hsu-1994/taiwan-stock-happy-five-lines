@@ -1,3 +1,4 @@
+// Record schema: {date, close}. Backend may attach additional fields that this client ignores.
 export type PricePoint = { date: string; close: number }
 
 export type JobStock = {
@@ -129,11 +130,6 @@ export async function loadStock(code: string): Promise<Stock> {
   const response = await fetch(`/data/${code}.json`)
   if (!response.ok) throw new Error(`無法讀取 ${code} 行情資料`)
   return normalizeStock(await response.json() as JobStock)
-}
-
-export async function loadStocks(): Promise<Stock[]> {
-  const payload = await loadWatchlist()
-  return Promise.all(payload.stocks.slice(0, 2).map((item) => loadStock(item.code)))
 }
 
 export const lineLabels = ['-2α', '-1α', 'TL', '+1α', '+2α']
