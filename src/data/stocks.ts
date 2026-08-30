@@ -35,6 +35,17 @@ export type LohuoChannelResult = {
   period: number
 }
 
+export type CalculationWindow = { id: number; startDate: string; endDate: string }
+
+export function resolveDateWindow(dates: string[], item: CalculationWindow): { start: number; end: number } | null {
+  const start = dates.findIndex((date) => date >= item.startDate)
+  let end = -1
+  for (let index = dates.length - 1; index >= 0; index -= 1) {
+    if (dates[index] <= item.endDate) { end = index; break }
+  }
+  return start >= 0 && end - start >= 2 ? { start, end } : null
+}
+
 export function calculateFiveLines(prices: number[]): FiveLineResult {
   const xs = prices.map((_, index) => index)
   const xMean = xs.reduce((sum, value) => sum + value, 0) / (xs.length || 1)

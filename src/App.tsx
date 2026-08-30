@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { AnimatedContent } from './components/reactbits/AnimatedContent'
-import { calculateFiveLines, calculateLohuoChannel, calculateLohuoChannelSeries, lineLabels, loadStock, loadWatchlist, type Stock, type WatchlistEntry } from './data/stocks'
+import { calculateFiveLines, calculateLohuoChannel, calculateLohuoChannelSeries, lineLabels, loadStock, loadWatchlist, resolveDateWindow, type CalculationWindow, type Stock, type WatchlistEntry } from './data/stocks'
 import type * as EChartsCore from 'echarts/core'
 import type { LineSeriesOption } from 'echarts/charts'
 import type { GridComponentOption, TooltipComponentOption } from 'echarts/components'
@@ -11,7 +11,6 @@ const ranges = { '近一個月': 22, '近三個月': 66, '近一年': 252, '近�
 type Range = keyof typeof ranges
 const calculationPeriods = { '近一個月': 22, '近三個月': 66, '近一年': 252, '近一年半': 378, '近三年': 756 } as const
 type CalculationPeriod = keyof typeof calculationPeriods | '自訂範圍'
-type CalculationWindow = { id: number; startDate: string; endDate: string }
 const comparisonColors = ['#5778a4', '#8f63a9', '#2f9c95', '#c48a32', '#c45b72', '#687a3d']
 const comparisonStorageKey = 'five-line-comparison-windows'
 
@@ -23,15 +22,6 @@ const loadComparisonWindows = (): CalculationWindow[] => {
   } catch {
     return []
   }
-}
-
-const resolveDateWindow = (dates: string[], item: CalculationWindow) => {
-  const start = dates.findIndex((date) => date >= item.startDate)
-  let end = -1
-  for (let index = dates.length - 1; index >= 0; index -= 1) {
-    if (dates[index] <= item.endDate) { end = index; break }
-  }
-  return start >= 0 && end - start >= 2 ? { start, end } : null
 }
 
 const money = (value: number) => value.toLocaleString('zh-TW', { maximumFractionDigits: 2 })
