@@ -137,19 +137,16 @@ def fetch_chart_rows(symbol: str, query_params: dict[str, str]) -> list[tuple[st
 
 def fetch_with_retry(symbol: str, fetch_fn: Callable[[str], list[tuple[str, float]]]) -> list[tuple[str, float]]:
     delays = (1, 2)
-    last_error: Exception | None = None
-    for attempt, delay in enumerate((0, *delays), start=1):
+    last_error: OSError | RuntimeError | None = None
+    for delay in (0, *delays):
         if delay:
             time_module.sleep(delay)
         try:
             return fetch_fn(symbol)
         except (OSError, RuntimeError) as error:
             last_error = error
-            if attempt > len(delays):
-                raise
-    if last_error is not None:
-        raise last_error
-    return []
+    assert last_error is not None
+    raise last_error
 
 
 def fetch_latest_close(symbol: str) -> list[tuple[str, float]]:
