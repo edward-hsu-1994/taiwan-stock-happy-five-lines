@@ -12,6 +12,9 @@ build:
 preview:
 	npm run preview
 
+lint:
+	npm run lint
+
 test:
 	npm test
 
