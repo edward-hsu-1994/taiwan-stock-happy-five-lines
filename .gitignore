@@ -2,3 +2,5 @@ node_modules/
 dist/
 job/__pycache__/
 *.pyc
+.superpowers/
+.DS_Store
