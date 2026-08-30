@@ -5,11 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time as time_module
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlencode
-import time as time_module
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -17,6 +17,7 @@ DEFAULT_CONFIG = PROJECT_ROOT / "public" / "data" / "stocks.json"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "public" / "data"
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
+
 
 
 def parse_args() -> argparse.Namespace:
@@ -134,7 +135,7 @@ def fetch_chart_rows(symbol: str, query_params: dict[str, str]) -> list[tuple[st
     return rows
 
 
-def fetch_with_retry(symbol: str, fetch_fn: "callable") -> list[tuple[str, float]]:
+def fetch_with_retry(symbol: str, fetch_fn: Callable[[str], list[tuple[str, float]]]) -> list[tuple[str, float]]:
     delays = (1, 2)
     last_error: Exception | None = None
     for attempt, delay in enumerate((0, *delays), start=1):
@@ -183,7 +184,7 @@ def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float]], ou
         else:
             raise ValueError(f"Expected a legacy JSON array or object with a data array in {output_path}")
         records = [
-            {"date": str(item["date"]), "close": float(item["close"])}
+            {"date": str(item["date"]), "close": round(float(item["close"]), 2)}
             for item in raw_records
             if isinstance(item, dict) and "date" in item and "close" in item
         ]
@@ -255,12 +256,12 @@ def main() -> int:
             update_watchlist_timestamp(args.config)
             print(f"Updated watchlist timestamp: {args.config}")
             for error in errors:
-                print(f"Error: {error}", file=sys.stderr)
+                print(f"Warning: {error}", file=sys.stderr)
             print(
-                f"{len(errors)} stock(s) failed after retries; partial data written.",
+                f"Warning: {len(errors)} stock(s) failed after retries; partial data written.",
                 file=sys.stderr,
             )
-            return 1
+            return 0
         update_watchlist_timestamp(args.config)
         print(f"Updated watchlist timestamp: {args.config}")
     except (OSError, ValueError, RuntimeError) as error:
