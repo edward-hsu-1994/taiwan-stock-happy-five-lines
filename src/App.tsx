@@ -17,10 +17,10 @@ import {
 } from './data/stocks'
 import type * as EChartsCore from 'echarts/core'
 import type { LineSeriesOption } from 'echarts/charts'
-import type { GridComponentOption, TooltipComponentOption } from 'echarts/components'
+import type { GridComponentOption, MarkLineComponentOption, TooltipComponentOption } from 'echarts/components'
 
 const StockChart = lazy(() => import('./components/StockChart'))
-type EChartsOption = EChartsCore.ComposeOption<LineSeriesOption | GridComponentOption | TooltipComponentOption>
+type EChartsOption = EChartsCore.ComposeOption<LineSeriesOption | GridComponentOption | MarkLineComponentOption | TooltipComponentOption>
 const comparisonStorageKey = 'five-line-comparison-windows'
 
 const loadComparisonWindows = (): CalculationWindow[] => {
@@ -446,7 +446,14 @@ function App() {
               <button aria-label="關閉研究聲明" onClick={dismissDisclosure}>×</button>
             </div>
           )}
-          {!stock ? (
+          {stockError ? (
+            <div className="main-card">
+              <div className="error-card main-error">
+                {stockError}
+                <button type="button" onClick={() => setStockRetryToken((token) => token + 1)}>重試</button>
+              </div>
+            </div>
+          ) : !stock ? (
             <div className="loading-card"><span className="pulse-dot" />正在讀取靜態行情資料…</div>
           ) : (
             <div className="main-card">
@@ -465,13 +472,6 @@ function App() {
                   </b>
                 </div>
               </div>
-              {stockError ? (
-                <div className="error-card main-error">
-                  {stockError}
-                  <button type="button" onClick={() => setStockRetryToken((token) => token + 1)}>重試</button>
-                </div>
-              ) : (
-                <>
                   <WindowControls
                     dates={stock.dates}
                     windowStart={windowStart}
@@ -513,8 +513,6 @@ function App() {
                   <Suspense fallback={<div className="chart-fallback" style={{ height: 320 }} />}>
                     <StockChart option={lohuoOption} style={{ height: 320 }} />
                   </Suspense>
-                </>
-              )}
             </div>
           )}
           {stock && (
