@@ -1,4 +1,4 @@
-.PHONY: install dev build preview lint job-install sync-watchlist fetch backfill clean
+.PHONY: install dev build preview lint test job-install sync-watchlist fetch backfill clean
 
 install:
 	npm install
@@ -14,6 +14,9 @@ preview:
 
 lint:
 	npm run lint
+
+test:
+	npm test
 
 job-install:
 	python3 -m pip install -r scripts/requirements.txt
