@@ -35,6 +35,48 @@ export type LohuoChannelResult = {
   period: number
 }
 
+/** Number of daily closing-price changes used by the standard RSI period. */
+export const RSI_PERIOD = 14
+
+/**
+ * Calculates Wilder's relative strength index for chronological daily closes.
+ *
+ * @param prices - Finite closing prices ordered from oldest to newest.
+ * @returns RSI values aligned with `prices`; the first 14 entries are `null`,
+ * then values range from 0 to 100. A fully unchanged period returns 50.
+ */
+export function calculateRelativeStrengthIndex(prices: number[]): (number | null)[] {
+  const values: (number | null)[] = new Array(prices.length).fill(null)
+  if (prices.length <= RSI_PERIOD) return values
+
+  let averageGain = 0
+  let averageLoss = 0
+  for (let index = 1; index < prices.length; index += 1) {
+    const change = prices[index] - prices[index - 1]
+    const gain = Math.max(change, 0)
+    const loss = Math.max(-change, 0)
+
+    if (index <= RSI_PERIOD) {
+      averageGain += gain
+      averageLoss += loss
+      if (index === RSI_PERIOD) {
+        averageGain /= RSI_PERIOD
+        averageLoss /= RSI_PERIOD
+      }
+    } else {
+      averageGain = (averageGain * (RSI_PERIOD - 1) + gain) / RSI_PERIOD
+      averageLoss = (averageLoss * (RSI_PERIOD - 1) + loss) / RSI_PERIOD
+    }
+
+    if (index >= RSI_PERIOD) {
+      values[index] = averageLoss === 0
+        ? averageGain === 0 ? 50 : 100
+        : 100 - 100 / (1 + averageGain / averageLoss)
+    }
+  }
+  return values
+}
+
 export function calculateFiveLines(prices: number[]): FiveLineResult {
   const xs = prices.map((_, index) => index)
   const xMean = xs.reduce((sum, value) => sum + value, 0) / (xs.length || 1)

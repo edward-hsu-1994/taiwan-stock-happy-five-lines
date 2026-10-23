@@ -7,6 +7,7 @@
 - 由固定觀察清單切換股票，支援上市與上櫃標的
 - ECharts 股價走勢圖與時間區間切換介面
 - 均值回歸與標準差五線的區間卡片與快速摘要
+- 14 日 Wilder RSI 動能指標，補充五線與標準差通道的短期動能視角
 - 響應式版面，支援桌面與行動裝置
 - `src/data/stocks.ts` 作為未來串接證交所、券商或自建 API 的資料邊界
 - `public/data/stocks.json` 集中管理要關注的台股清單與靜態行情 JSON
@@ -38,7 +39,7 @@ make dev
 make build    # Create the production bundle
 make preview  # Preview the production bundle
 make lint     # Run the TypeScript check
-make test     # Run stock-price merge tests
+make test     # Run Python and Vitest test suites
 make fetch    # Fetch one latest close per watchlist stock
 make backfill START_DATE=2026-01-01 END_DATE=2026-07-19  # Fill a date range
 make clean    # Remove build output and temporary files
@@ -48,7 +49,7 @@ make clean    # Remove build output and temporary files
 
 1. 將 `src/data/stocks.ts` 的 mock data 改成 `src/services/stockApi.ts`。
 2. 建立 API response type，將行情、財報與估值計算分開。
-3. 將標準差五線計算放在純函式中，補上 Vitest 測試。
+3. 將標準差五線與其他指標計算維持為純函式，並以 Vitest 測試重要邊界。
 4. 若瀏覽器直接呼叫資料來源遇到 CORS，使用同源 proxy 或後端 API gateway。
 
 ## 關注清單設定
@@ -89,6 +90,20 @@ make clean    # Remove build output and temporary files
 ## 注意事項
 
 目前資料與合理價為介面示意，不代表即時行情，也不是投資建議。正式使用前，請確認資料授權、更新頻率、計算公式與錯誤狀態處理。
+
+## 技術指標與台股解讀
+
+14 日相對強弱指標（RSI）使用每日收盤價變動，先以 14 個交易日變動計算平均漲跌幅，再以 Wilder 平滑法遞推；結果與交易日一一對齊，資料不足時不顯示數值。RSI 介於 0–100，70 與 30 是常見的偏熱／偏冷參考區，不代表價格必定反轉。強勢或弱勢趨勢可能讓 RSI 長時間停留在極端區域，因此應搭配五線與標準差通道解讀。
+
+本專案的行情資料目前只有收盤價，因此採用 RSI 作為可直接計算、且不重複標準差通道的動能補充。ATR 需要最高價與最低價，OBV 需要成交量，VWAP 需要盤中價格與成交量；目前資料無法支援這些指標。
+
+台股規則也會影響指標解讀：TWSE 對一般股票及部分本土證券產品設有每日價格漲跌幅限制，並列有不適用類別；TPEx 興櫃股票則沒有每日漲跌幅限制。RSI 因此不套用單一的「台股漲跌停校正」，連續觸及價格限制時也不應將極端 RSI 當成反轉訊號。此處僅提供價格動能觀察，不構成投資建議。
+
+參考資料：
+
+- [Wilder RSI 計算、常見區間與趨勢限制（StockCharts）](https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/relative-strength-index-rsi)
+- [每日漲跌幅與價格跳動單位（TWSE）](https://www.twse.com.tw/en/products/system/trading.html)
+- [興櫃交易規則：無每日價格漲跌幅限制（TPEx）](https://www.tpex.org.tw/en-us/esb/trading/rules/overview.html)
 
 ## 拉取每日收盤價
 
