@@ -17,6 +17,7 @@ lint:
 
 test:
 	python3 -m unittest discover -s tests
+	npm test
 
 job-install:
 	python3 -m pip install -r scripts/requirements.txt
