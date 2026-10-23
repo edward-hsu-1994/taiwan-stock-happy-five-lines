@@ -38,6 +38,7 @@ make dev
 make build    # Create the production bundle
 make preview  # Preview the production bundle
 make lint     # Run the TypeScript check
+make test     # Run stock-price merge tests
 make fetch    # Fetch one latest close per watchlist stock
 make backfill START_DATE=2026-01-01 END_DATE=2026-07-19  # Fill a date range
 make clean    # Remove build output and temporary files
