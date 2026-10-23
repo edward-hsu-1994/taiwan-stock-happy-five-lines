@@ -1,4 +1,5 @@
-export type PricePoint = { date: string; close: number }
+/** Daily close plus optional traded share volume; legacy rows may omit volume. */
+export type PricePoint = { date: string; close: number; volume?: number | null }
 
 export type JobStock = {
   market: string
@@ -76,6 +77,43 @@ export function calculateRelativeStrengthIndex(prices: number[]): (number | null
   }
   return values
 }
+
+/** Number of prior valid volume observations used by the relative-volume baseline. */
+export const RELATIVE_VOLUME_PERIOD = 20
+
+/**
+ * Calculates each session's volume against the 20 most recent valid earlier volumes.
+ *
+ * @param volumes - Chronological share volumes; missing values are `null` or `undefined`.
+ * @returns Ratios aligned with `volumes`; early or zero-volume baselines are `null`.
+ */
+export function calculateRelativeVolume(volumes: (number | null | undefined)[]): (number | null)[] {
+  const values: (number | null)[] = new Array(volumes.length).fill(null)
+  const previousVolumes: number[] = new Array(RELATIVE_VOLUME_PERIOD)
+  let rollingVolume = 0
+  let previousCount = 0
+  let nextIndex = 0
+
+  for (let index = 0; index < volumes.length; index += 1) {
+    const currentVolume = volumes[index]
+    if (typeof currentVolume !== 'number' || !Number.isFinite(currentVolume) || currentVolume < 0) continue
+
+    if (previousCount === RELATIVE_VOLUME_PERIOD) {
+      if (rollingVolume > 0) values[index] = currentVolume / (rollingVolume / RELATIVE_VOLUME_PERIOD)
+      rollingVolume -= previousVolumes[nextIndex]
+      previousVolumes[nextIndex] = currentVolume
+      rollingVolume += currentVolume
+      nextIndex = (nextIndex + 1) % RELATIVE_VOLUME_PERIOD
+    } else {
+      previousVolumes[previousCount] = currentVolume
+      rollingVolume += currentVolume
+      previousCount += 1
+      if (previousCount === RELATIVE_VOLUME_PERIOD) nextIndex = 0
+    }
+  }
+  return values
+}
+
 
 export function calculateFiveLines(prices: number[]): FiveLineResult {
   const xs = prices.map((_, index) => index)

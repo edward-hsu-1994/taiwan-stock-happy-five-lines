@@ -33,7 +33,7 @@ jobs:
       - name: Install job dependencies
         run: python -m pip install -r scripts/requirements.txt
 
-      - name: Fetch latest completed trading-day closes
+      - name: Fetch latest completed daily closes and volumes
         run: python scripts/fetch_stock_prices.py --mode latest
 
       - name: Commit and push data changes

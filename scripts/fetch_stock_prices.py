@@ -1,9 +1,10 @@
-"""Fetch daily Taiwan stock closes from Yahoo Finance and persist them locally."""
+"""Fetch daily Taiwan stock prices and volumes from Yahoo Finance."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -102,7 +103,21 @@ def remove_unwatched_data(watchlist: list[dict[str, str]], output_dir: Path) -> 
     return removed_paths
 
 
-def fetch_chart_rows(symbol: str, query_params: dict[str, str]) -> list[tuple[str, float]]:
+def fetch_chart_rows(symbol: str, query_params: dict[str, str]) -> list[tuple[str, float, int | None]]:
+    """Fetch completed daily close and volume rows for a Yahoo symbol.
+
+    Args:
+        symbol: Yahoo Finance symbol, such as ``0050.TW``.
+        query_params: Chart API range or period parameters.
+
+    Returns:
+        Trading-date, close, and share-volume tuples. Volume is ``None`` when
+        Yahoo omits it; rows without a closing price are skipped.
+
+    Raises:
+        OSError: If the request fails.
+        RuntimeError: If Yahoo returns no result or no closing prices.
+    """
     query = urlencode(query_params)
     request = Request(
         f"{YAHOO_CHART_URL}/{symbol}?{query}",
@@ -118,29 +133,50 @@ def fetch_chart_rows(symbol: str, query_params: dict[str, str]) -> list[tuple[st
 
     chart = result[0]
     timestamps = chart.get("timestamp") or []
-    closes = (((chart.get("indicators") or {}).get("quote") or [{}])[0]).get("close") or []
-    rows = [
-        (
-            datetime.fromtimestamp(timestamp, tz=timezone.utc)
-            .astimezone(TAIPEI_TZ)
-            .date()
-            .isoformat(),
-            float(close),
+    quote = (((chart.get("indicators") or {}).get("quote") or [{}])[0])
+    closes = quote.get("close") or []
+    volumes = quote.get("volume") or []
+    rows: list[tuple[str, float, int | None]] = []
+    for index, (timestamp, close) in enumerate(zip(timestamps, closes)):
+        if close is None:
+            continue
+        raw_volume = volumes[index] if index < len(volumes) else None
+        volume = (
+            int(raw_volume)
+            if isinstance(raw_volume, (int, float)) and math.isfinite(raw_volume) and raw_volume >= 0
+            else None
         )
-        for timestamp, close in zip(timestamps, closes)
-        if close is not None
-    ]
+        trading_date = datetime.fromtimestamp(timestamp, tz=timezone.utc).astimezone(TAIPEI_TZ).date().isoformat()
+        rows.append((trading_date, float(close), volume))
     if not rows:
         raise RuntimeError(f"No closing price returned for {symbol}")
     return rows
 
 
-def fetch_latest_close(symbol: str) -> list[tuple[str, float]]:
+def fetch_latest_prices(symbol: str) -> list[tuple[str, float, int | None]]:
+    """Fetch the most recent completed daily price and volume row.
+
+    Args:
+        symbol: Yahoo Finance symbol.
+
+    Returns:
+        A one-row list of date, close, and optional volume tuples.
+    """
     rows = fetch_chart_rows(symbol, {"range": "5d", "interval": "1d", "includePrePost": "false"})
     return rows[-1:]
 
 
-def fetch_date_range(symbol: str, start_date: str, end_date: str) -> list[tuple[str, float]]:
+def fetch_date_range(symbol: str, start_date: str, end_date: str) -> list[tuple[str, float, int | None]]:
+    """Fetch daily close and volume rows for an inclusive local date range.
+
+    Args:
+        symbol: Yahoo Finance symbol.
+        start_date: First Taiwan calendar date in ISO format.
+        end_date: Last Taiwan calendar date in ISO format.
+
+    Returns:
+        Sorted trading-date, close, and optional volume tuples.
+    """
     start = datetime.combine(date.fromisoformat(start_date), time.min, tzinfo=TAIPEI_TZ)
     end = datetime.combine(date.fromisoformat(end_date) + timedelta(days=1), time.min, tzinfo=TAIPEI_TZ)
     return fetch_chart_rows(
@@ -156,18 +192,19 @@ def fetch_date_range(symbol: str, start_date: str, end_date: str) -> list[tuple[
 
 def _merge_daily_records(
     existing_records: list[dict[str, Any]],
-    rows: list[tuple[str, float]],
+    rows: list[tuple[str, float, int | None]],
     retrieved_at: str,
 ) -> list[dict[str, Any]]:
     """Return sorted history with fetched dates replaced.
 
     Existing rows for fetched dates are replaced; rows for other dates,
     including duplicates, are retained. If fetched rows repeat a date, the
-    last fetched row wins. The input records are not mutated.
+    last fetched row wins. A missing fetched volume preserves an existing
+    valid volume for that date. The input records are not mutated.
 
     Args:
         existing_records: Existing JSON-object price rows.
-        rows: Fetched (ISO trading date, close price) pairs.
+        rows: Fetched (ISO trading date, close, optional share volume) tuples.
         retrieved_at: UTC timestamp to store on each replacement row.
 
     Returns:
@@ -177,17 +214,29 @@ def _merge_daily_records(
         AttributeError: If an existing price row is not a JSON object.
     """
     replacements: dict[str, dict[str, Any]] = {}
-    for trading_date, close in rows:
-        replacements[trading_date] = {
+    for trading_date, close, volume in rows:
+        record: dict[str, Any] = {
             "date": trading_date,
             "close": close,
             "retrieved_at": retrieved_at,
         }
+        if volume is not None:
+            record["volume"] = volume
+        replacements[trading_date] = record
 
     records: list[dict[str, Any]] = []
     for item in existing_records:
         existing_date = item.get("date")
-        if isinstance(existing_date, str) and existing_date in replacements:
+        replacement = replacements.get(existing_date) if isinstance(existing_date, str) else None
+        if replacement is not None:
+            old_volume = item.get("volume")
+            if (
+                "volume" not in replacement
+                and isinstance(old_volume, (int, float))
+                and math.isfinite(old_volume)
+                and old_volume >= 0
+            ):
+                replacement["volume"] = old_volume
             continue
         records.append(item)
 
@@ -196,12 +245,12 @@ def _merge_daily_records(
     return records
 
 
-def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float]], output_dir: Path) -> Path:
-    """Merge fetched closes and atomically write a stock's price history.
+def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float, int | None]], output_dir: Path) -> Path:
+    """Merge fetched prices and optional volumes, then atomically write history.
 
     Args:
         stock: Validated watchlist item containing market, code, and name.
-        rows: Fetched ISO trading-date and closing-price pairs.
+        rows: Fetched ISO trading-date, closing-price, and volume tuples.
         output_dir: Destination directory for the stock's JSON history.
 
     Returns:
@@ -257,15 +306,16 @@ def main() -> int:
             symbol = yahoo_symbol(stock)
             try:
                 if args.mode == "latest":
-                    rows = fetch_latest_close(symbol)
+                    rows = fetch_latest_prices(symbol)
                 else:
                     rows = fetch_date_range(symbol, args.start_date, args.end_date)
                 output_path = write_daily_records(stock, rows, args.output_dir)
                 if args.mode == "latest":
-                    trading_date, close = rows[0]
-                    print(f"{symbol}: {trading_date} close={close:g} -> {output_path}")
+                    trading_date, close, volume = rows[0]
+                    volume_text = f"{volume:,}" if volume is not None else "unavailable"
+                    print(f"{symbol}: {trading_date} close={close:g} volume={volume_text} -> {output_path}")
                 else:
-                    print(f"{symbol}: {len(rows)} daily closes -> {output_path}")
+                    print(f"{symbol}: {len(rows)} daily price/volume rows -> {output_path}")
             except (OSError, RuntimeError) as error:
                 errors.append(f"{symbol}: {error}")
         if errors:

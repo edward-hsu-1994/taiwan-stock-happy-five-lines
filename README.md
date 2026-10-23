@@ -8,6 +8,7 @@
 - ECharts 股價走勢圖與時間區間切換介面
 - 均值回歸與標準差五線的區間卡片與快速摘要
 - 14 日 Wilder RSI 動能指標，補充五線與標準差通道的短期動能視角
+- 20 日相對成交量（RVOL），以個股近期成交量基準觀察成交活躍度
 - 響應式版面，支援桌面與行動裝置
 - `src/data/stocks.ts` 作為未來串接證交所、券商或自建 API 的資料邊界
 - `public/data/stocks.json` 集中管理要關注的台股清單與靜態行情 JSON
@@ -95,19 +96,26 @@ make clean    # Remove build output and temporary files
 
 14 日相對強弱指標（RSI）使用每日收盤價變動，先以 14 個交易日變動計算平均漲跌幅，再以 Wilder 平滑法遞推；結果與交易日一一對齊，資料不足時不顯示數值。RSI 介於 0–100，70 與 30 是常見的偏熱／偏冷參考區，不代表價格必定反轉。強勢或弱勢趨勢可能讓 RSI 長時間停留在極端區域，因此應搭配五線與標準差通道解讀。
 
-本專案的行情資料目前只有收盤價，因此採用 RSI 作為可直接計算、且不重複標準差通道的動能補充。ATR 需要最高價與最低價，OBV 需要成交量，VWAP 需要盤中價格與成交量；目前資料無法支援這些指標。
+20 日相對成交量（RVOL）= 最近一筆有效成交量的交易日成交股數 ÷ 前 20 筆有效成交量的平均值。介面會標出該筆量價資料的日期；1.0× 表示與個股近期均量相同，高於 1.0×代表成交較活躍。它只反映個股已成交量相對於自身近期基準的強弱，不表示買賣方向，也不是進出場訊號。
+
+目前行情資料逐步加入 Yahoo Finance 每日成交股數；舊紀錄或缺漏量值仍可讀取。RVOL 忽略缺值，只在已有 20 筆有效歷史成交量且基準均量大於零時產生；介面顯示最近一筆可計算的日期。ATR 仍需要最高價與最低價，VWAP 則需要盤中價格與成交量；目前不計算這兩項指標。
 
 台股規則也會影響指標解讀：TWSE 對一般股票及部分本土證券產品設有每日價格漲跌幅限制，並列有不適用類別；TPEx 興櫃股票則沒有每日漲跌幅限制。RSI 因此不套用單一的「台股漲跌停校正」，連續觸及價格限制時也不應將極端 RSI 當成反轉訊號。此處僅提供價格動能觀察，不構成投資建議。
+
+TWSE 與 TPEx 均提供個股每日成交量／成交資訊。台股漲跌幅限制可能使高 RVOL 與漲跌停日同時出現，但 RVOL 只計算已成交股數，無法看到未成交委託或判斷買賣方向；應搭配收盤價位置及 RSI 解讀。
 
 參考資料：
 
 - [Wilder RSI 計算、常見區間與趨勢限制（StockCharts）](https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/relative-strength-index-rsi)
+- [Relative Volume（RVOL）公式與解讀（StockCharts）](https://chartschool.stockcharts.com/table-of-contents/technical-indicators-and-overlays/technical-indicators/relative-volume-rvol)
 - [每日漲跌幅與價格跳動單位（TWSE）](https://www.twse.com.tw/en/products/system/trading.html)
 - [興櫃交易規則：無每日價格漲跌幅限制（TPEx）](https://www.tpex.org.tw/en-us/esb/trading/rules/overview.html)
+- [個股每日成交值／成交量（TWSE）](https://www.twse.com.tw/en/trading/historical/stock-day.html)
+- [每日個股行情（TPEx）](https://www.tpex.org.tw/en/stock/aftertrading/DAILY_CLOSE_quotes/stk_quote.php)
 
-## 拉取每日收盤價
+## 拉取每日收盤價與成交量
 
-`scripts/fetch_stock_prices.py` 會讀取 `public/data/stocks.json`，預設每檔股票取得一筆最新的已完成交易日收盤價，並寫入 `public/data/{股票代號}.json`。每個 JSON 檔案是 object，股票基本資料放在外層，歷史價格放在 `data` array；每次交易日執行會追加一筆，同一交易日重複執行時會更新該筆資料，不會產生重複紀錄。週末或休市日會使用最近一個已完成交易日，避免寫入虛假的收盤價。
+`scripts/fetch_stock_prices.py` 會讀取 `public/data/stocks.json`，預設取得每檔股票最近一個已完成交易日的收盤價與可用成交量，並寫入 `public/data/{股票代號}.json`。每筆行情的 `volume` 可能為空；舊資料缺少成交量時，前端會保留價格顯示，但不會用缺值計算 RVOL。每次交易日重複執行會更新同日紀錄，不會產生重複日期；週末或休市日使用最近一個已完成交易日。
 
 若要補齊一段歷史資料，可使用 `backfill` 模式：
 
@@ -124,7 +132,7 @@ python3 scripts/fetch_stock_prices.py \
 make backfill START_DATE=2026-01-01 END_DATE=2026-07-19
 ```
 
-`backfill` 會抓取指定日期範圍內的每日收盤價，合併到既有 JSON object 的 `data` array，並依日期去重；整批成功後會更新 `stocks.json` 的 `last_updated_at`。
+`backfill` 會抓取指定日期範圍的收盤價與可用成交量，合併到既有 `data` 陣列並依日期去重；整批成功後更新 `stocks.json` 的 `last_updated_at`。
 
 每次執行前，腳本也會同步檢查 `public/data/`：凡是股票代號不再存在於 `public/data/stocks.json` 的 `.json` 檔案都會被清除；非 JSON 檔案不會受到影響。為避免誤刪，空的關注清單會讓腳本直接停止。
 
@@ -133,7 +141,7 @@ make job-install
 make fetch
 ```
 
-輸出資料包含 `date`、`close` 與每筆資料的抓取時間；JSON 外層則包含 `market`、`code`、`name`、Yahoo symbol、幣別及 `data` 歷史價格陣列。資料會以 `public/data/{股票代號}.json` 儲存，前端從 `/data/{股票代號}.json` 讀取。這個工作適合在台灣收盤後透過 cron、GitHub Actions 或其他排程器執行。
+輸出行情記錄包含 `date`、`close`、可選的 `volume` 與 `retrieved_at`；舊紀錄沒有 `volume` 仍可讀取。資料存放於 `public/data/{股票代號}.json`，前端由 `/data/{股票代號}.json` 載入。每日收盤價與成交量皆使用已完成交易日資料。
 
 ## GitHub Actions 自動更新
 
