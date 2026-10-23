@@ -1,5 +1,5 @@
 {
-  "last_updated_at": "2026-10-23T13:32:52.360878+08:00",
+  "last_updated_at": "2026-10-23T13:55:23.758299+08:00",
   "stocks": [
     {
       "market": "TWSE",
@@ -35,6 +35,11 @@
       "market": "TWSE",
       "code": "00919",
       "name": "群益台灣精選高息"
+    },
+    {
+      "market": "TWSE",
+      "code": "00981A",
+      "name": "主動統一台股增長"
     },
     {
       "market": "TWSE",
