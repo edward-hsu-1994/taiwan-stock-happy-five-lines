@@ -153,7 +153,66 @@ def fetch_date_range(symbol: str, start_date: str, end_date: str) -> list[tuple[
         },
     )
 
+
+def _merge_daily_records(
+    existing_records: list[dict[str, Any]],
+    rows: list[tuple[str, float]],
+    retrieved_at: str,
+) -> list[dict[str, Any]]:
+    """Return sorted history with fetched dates replaced.
+
+    Existing rows for fetched dates are replaced; rows for other dates,
+    including duplicates, are retained. If fetched rows repeat a date, the
+    last fetched row wins. The input records are not mutated.
+
+    Args:
+        existing_records: Existing JSON-object price rows.
+        rows: Fetched (ISO trading date, close price) pairs.
+        retrieved_at: UTC timestamp to store on each replacement row.
+
+    Returns:
+        A new list containing retained and replacement rows, sorted by date.
+
+    Raises:
+        AttributeError: If an existing price row is not a JSON object.
+    """
+    replacements: dict[str, dict[str, Any]] = {}
+    for trading_date, close in rows:
+        replacements[trading_date] = {
+            "date": trading_date,
+            "close": close,
+            "retrieved_at": retrieved_at,
+        }
+
+    records: list[dict[str, Any]] = []
+    for item in existing_records:
+        existing_date = item.get("date")
+        if isinstance(existing_date, str) and existing_date in replacements:
+            continue
+        records.append(item)
+
+    records.extend(replacements.values())
+    records.sort(key=lambda item: item.get("date", ""))
+    return records
+
+
 def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float]], output_dir: Path) -> Path:
+    """Merge fetched closes and atomically write a stock's price history.
+
+    Args:
+        stock: Validated watchlist item containing market, code, and name.
+        rows: Fetched ISO trading-date and closing-price pairs.
+        output_dir: Destination directory for the stock's JSON history.
+
+    Returns:
+        Path to the written stock JSON file.
+
+    Raises:
+        OSError: If the output directory or JSON file cannot be accessed.
+        ValueError: If existing JSON is malformed or has an unsupported shape.
+        KeyError: If stock metadata omits a required field.
+        AttributeError: If an existing history row is not a JSON object.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{stock['code']}.json"
     records: list[dict[str, Any]] = []
@@ -168,15 +227,7 @@ def write_daily_records(stock: dict[str, str], rows: list[tuple[str, float]], ou
             raise ValueError(f"Expected a legacy JSON array or object with a data array in {output_path}")
 
     retrieved_at = datetime.now(timezone.utc).isoformat()
-    for trading_date, close in rows:
-        record = {
-            "date": trading_date,
-            "close": close,
-            "retrieved_at": retrieved_at,
-        }
-        records = [item for item in records if item.get("date") != trading_date]
-        records.append(record)
-    records.sort(key=lambda item: item.get("date", ""))
+    records = _merge_daily_records(records, rows, retrieved_at)
     payload = {
         "market": stock["market"],
         "code": stock["code"],
