@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import unittest
+from datetime import datetime, timezone
+from io import BytesIO
+from unittest.mock import patch
 
-from scripts.fetch_stock_prices import _merge_daily_records
+from scripts.fetch_stock_prices import _merge_daily_records, fetch_chart_rows
 
 
 class MergeDailyRecordsTests(unittest.TestCase):
@@ -20,7 +24,7 @@ class MergeDailyRecordsTests(unittest.TestCase):
 
         actual = _merge_daily_records(
             existing_records,
-            [("2024-01-02", 20.0)],
+            [("2024-01-02", 20.0, 2_000)],
             "new",
         )
 
@@ -38,7 +42,7 @@ class MergeDailyRecordsTests(unittest.TestCase):
 
         actual = _merge_daily_records(
             existing_records,
-            [("2024-01-03", 12.0)],
+            [("2024-01-03", 12.0, 1_200)],
             "new",
         )
 
@@ -59,13 +63,59 @@ class MergeDailyRecordsTests(unittest.TestCase):
 
         actual = _merge_daily_records(
             existing_records,
-            [("2024-01-03", 20.0), ("2024-01-03", 21.0)],
+            [("2024-01-03", 20.0, 2_000), ("2024-01-03", 21.0, 2_100)],
             "new",
         )
 
         self.assertEqual(
             [("2024-01-03", 21.0)],
             [(item["date"], item["close"]) for item in actual],
+        )
+
+
+
+class VolumeIngestionTests(unittest.TestCase):
+    """Verify daily volume is parsed and preserved with close prices."""
+
+    def test_fetch_chart_rows_returns_close_and_volume(self) -> None:
+        """Yahoo quote arrays align close and volume by trading timestamp."""
+        timestamp = int(datetime(2026, 10, 20, 1, tzinfo=timezone.utc).timestamp())
+        payload = {
+            "chart": {
+                "result": [{
+                    "timestamp": [timestamp, timestamp + 86_400],
+                    "indicators": {"quote": [{
+                        "close": [100.5, 101.25],
+                        "volume": [1_500_000, None],
+                    }]},
+                }],
+            },
+        }
+
+        with patch("scripts.fetch_stock_prices.urlopen", return_value=BytesIO(json.dumps(payload).encode("utf-8"))):
+            rows = fetch_chart_rows("0050.TW", {"range": "2d", "interval": "1d"})
+
+        self.assertEqual(
+            [("2026-10-20", 100.5, 1_500_000), ("2026-10-21", 101.25, None)],
+            rows,
+        )
+
+    def test_merge_daily_records_stores_volume_and_preserves_known_volume(self) -> None:
+        """Fetched volume replaces a date while missing volume keeps old data."""
+        existing = [
+            {"date": "2026-10-20", "close": 100.0, "volume": 900},
+            {"date": "2026-10-21", "close": 101.0, "volume": 1_000},
+        ]
+
+        updated = _merge_daily_records(
+            existing,
+            [("2026-10-20", 100.5, 1_500), ("2026-10-21", 101.25, None)],
+            "new",
+        )
+
+        self.assertEqual(
+            [("2026-10-20", 100.5, 1_500), ("2026-10-21", 101.25, 1_000)],
+            [(item["date"], item["close"], item.get("volume")) for item in updated],
         )
 
 
