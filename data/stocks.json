@@ -1,0 +1,200 @@
+{
+  "last_updated_at": "2026-10-31T22:17:47.606408+08:00",
+  "stocks": [
+    {
+      "market": "TWSE",
+      "code": "0050",
+      "name": "元大台灣50"
+    },
+    {
+      "market": "TWSE",
+      "code": "006208",
+      "name": "富邦台50"
+    },
+    {
+      "market": "TWSE",
+      "code": "0056",
+      "name": "元大高股息"
+    },
+    {
+      "market": "TWSE",
+      "code": "00713",
+      "name": "元大台灣高息低波"
+    },
+    {
+      "market": "TPEx",
+      "code": "00751B",
+      "name": "元大AAA至A公司債"
+    },
+    {
+      "market": "TPEx",
+      "code": "00858",
+      "name": "永豐美國500大"
+    },
+    {
+      "market": "TWSE",
+      "code": "00919",
+      "name": "群益台灣精選高息"
+    },
+    {
+      "market": "TWSE",
+      "code": "00981A",
+      "name": "主動統一台股增長"
+    },
+    {
+      "market": "TWSE",
+      "code": "00992A",
+      "name": "主動群益科技創新"
+    },
+    {
+      "market": "TWSE",
+      "code": "00980A",
+      "name": "主動野村臺灣優選"
+    },
+    {
+      "market": "TWSE",
+      "code": "00989A",
+      "name": "主動摩根美國科技"
+    },
+    {
+      "market": "TWSE",
+      "code": "00986A",
+      "name": "主動台新龍頭成長"
+    },
+    {
+      "market": "TWSE",
+      "code": "009824",
+      "name": "群益美國科技巨頭"
+    },
+    {
+      "market": "TWSE",
+      "code": "1216",
+      "name": "統一"
+    },
+    {
+      "market": "TWSE",
+      "code": "1503",
+      "name": "士電"
+    },
+    {
+      "market": "TWSE",
+      "code": "1513",
+      "name": "中興電"
+    },
+    {
+      "market": "TWSE",
+      "code": "2207",
+      "name": "和泰車"
+    },
+    {
+      "market": "TWSE",
+      "code": "2317",
+      "name": "鴻海"
+    },
+    {
+      "market": "TWSE",
+      "code": "2301",
+      "name": "光寶科"
+    },
+    {
+      "market": "TWSE",
+      "code": "2308",
+      "name": "台達電"
+    },
+    {
+      "market": "TWSE",
+      "code": "2327",
+      "name": "國巨"
+    },
+    {
+      "market": "TWSE",
+      "code": "2344",
+      "name": "華邦電"
+    },
+    {
+      "market": "TWSE",
+      "code": "2427",
+      "name": "三商電"
+    },
+    {
+      "market": "TWSE",
+      "code": "2480",
+      "name": "敦陽科"
+    },
+    {
+      "market": "TWSE",
+      "code": "2645",
+      "name": "長榮航太"
+    },
+    {
+      "market": "TWSE",
+      "code": "2618",
+      "name": "長榮航"
+    },
+    {
+      "market": "TWSE",
+      "code": "2881",
+      "name": "富邦金"
+    },
+    {
+      "market": "TWSE",
+      "code": "6005",
+      "name": "群益證"
+    },
+    {
+      "market": "TPEx",
+      "code": "6763",
+      "name": "綠界科技*"
+    },
+    {
+      "market": "TWSE",
+      "code": "7722",
+      "name": "LINEPAY"
+    },
+    {
+      "market": "TPEx",
+      "code": "7734",
+      "name": "印能科技"
+    },
+    {
+      "market": "TWSE",
+      "code": "2002",
+      "name": "中鋼"
+    },
+    {
+      "market": "TWSE",
+      "code": "2603",
+      "name": "長榮"
+    },
+    {
+      "market": "TWSE",
+      "code": "1301",
+      "name": "台塑"
+    },
+    {
+      "market": "TWSE",
+      "code": "6505",
+      "name": "台塑化"
+    },
+    {
+      "market": "TWSE",
+      "code": "2408",
+      "name": "南亞科"
+    },
+    {
+      "market": "TWSE",
+      "code": "3481",
+      "name": "群創"
+    },
+    {
+      "market": "TWSE",
+      "code": "2409",
+      "name": "友達"
+    },
+    {
+      "market": "TWSE",
+      "code": "8926",
+      "name": "台汽電"
+    }
+  ]
+}
